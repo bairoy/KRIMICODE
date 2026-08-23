@@ -93,8 +93,9 @@ function killGroup(pid: number, signal: NodeJS.Signals): void {
  * A non-zero exit is a normal outcome, not an exception: it comes back as a
  * CommandResult with `success: false` so the model can read and react to it.
  */
-export function runCommand(
-  command: string,
+function spawnAndCollect(
+  file: string,
+  args: readonly string[],
   options: RunCommandOptions,
 ): Promise<CommandResult> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -102,7 +103,7 @@ export function runCommand(
   const startedAt = Date.now();
 
   return new Promise<CommandResult>((resolve) => {
-    const child = spawn('/bin/sh', ['-c', command], {
+    const child = spawn(file, [...args], {
       cwd: options.cwd,
       detached: true, // new process group, so we can kill the whole tree
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -155,4 +156,34 @@ export function runCommand(
     // flushed, so no trailing output is lost.
     child.on('close', (code) => finish(code));
   });
+}
+
+/**
+ * Runs a shell command. The string is interpreted by `/bin/sh -c`, so it
+ * supports pipes, redirection, and globbing.
+ *
+ * Only for commands the user has approved as a whole. Never build one of these
+ * by interpolating model-supplied text — use `runProgram` instead.
+ */
+export function runCommand(
+  command: string,
+  options: RunCommandOptions,
+): Promise<CommandResult> {
+  return spawnAndCollect('/bin/sh', ['-c', command], options);
+}
+
+/**
+ * Runs a program directly with an argv array and **no shell**.
+ *
+ * Use this whenever any argument comes from the model. Arguments are passed to
+ * execve as separate strings, so shell metacharacters in them are inert: a
+ * search pattern like `foo"; rm -rf ~; echo "` is just a pattern, never code.
+ * The same string routed through `runCommand` would execute.
+ */
+export function runProgram(
+  file: string,
+  args: readonly string[],
+  options: RunCommandOptions,
+): Promise<CommandResult> {
+  return spawnAndCollect(file, args, options);
 }

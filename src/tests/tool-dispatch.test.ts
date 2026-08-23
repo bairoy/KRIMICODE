@@ -113,7 +113,16 @@ test('JSON Schema is derived from the Zod schema, with $schema stripped', () => 
 
 test('the registry exposes exactly the registered tools', () => {
   const names = toolSpecs().map((spec) => spec.name).sort();
-  assert.deepEqual(names, ['edit_file', 'read_file', 'run_command']);
+  assert.deepEqual(names, [
+    'edit_file',
+    'git_diff',
+    'git_status',
+    'list_files',
+    'read_file',
+    'run_command',
+    'run_tests',
+    'search_code',
+  ]);
 });
 
 test('an unknown tool name resolves to undefined rather than throwing', () => {
