@@ -20,19 +20,28 @@ export interface Config {
 }
 
 /**
+ * Loads `.env` into `process.env`. Call once, at startup.
+ *
+ * Kept separate from `loadConfig` so that validation stays a pure function of
+ * whatever environment it is handed. Reading a file and mutating a global
+ * inside the validator would make it depend on the working directory.
+ */
+export function loadEnvFile(path = '.env'): void {
+  try {
+    process.loadEnvFile(path);
+  } catch {
+    // A missing .env is normal — in production the variables come from the
+    // shell instead.
+  }
+}
+
+/**
  * Validates the environment and returns config.
  *
  * Never log the returned object wholesale — it carries the API key.
  */
-export function loadConfig(): Config {
-  // Missing .env is not an error; the vars may come from the shell.
-  try {
-    process.loadEnvFile('.env');
-  } catch {
-    // no-op
-  }
-
-  const parsed = EnvSchema.safeParse(process.env);
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  const parsed = EnvSchema.safeParse(env);
   if (!parsed.success) {
     // Report issue paths and messages only. Never echo the values —
     // one of them is the API key.

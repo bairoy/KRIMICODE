@@ -9,7 +9,7 @@ import type {
 } from './types.js';
 
 /** Runaway-loop guard: a model that keeps calling tools must still terminate. */
-const MAX_TURNS = 25;
+const MAX_TURNS = 30;
 
 const SYSTEM_PROMPT = [
   'You are a terminal coding assistant working inside the user\'s workspace.',
