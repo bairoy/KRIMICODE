@@ -28,9 +28,9 @@ export const readFileTool = defineTool({
     return isSensitivePath(input.path)
       ? {
           operation: 'READ_SENSITIVE',
-          detail: `Read "${input.path}" — this looks like a credential file.`,
+          detail: `${input.path}  — credential file`,
         }
-      : { operation: 'READ', detail: `Read "${input.path}"` };
+      : { operation: 'READ', detail: input.path };
   },
 
   async execute(input, context) {

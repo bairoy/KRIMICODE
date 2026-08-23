@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import type { OperationClass, PermissionGate } from '../permissions.js';
+import type {
+  ContentChange,
+  OperationClass,
+  PermissionGate,
+} from '../permissions.js';
 import type { ToolResult } from '../types.js';
 
 /**
@@ -16,8 +20,10 @@ export interface ToolContext {
 /** How a specific call should be classified, given its validated input. */
 export interface CallClassification {
   readonly operation: OperationClass;
-  /** One line shown to the user in the approval prompt. */
+  /** The target, in one short line: a path, or a command. */
   readonly detail: string;
+  /** Optional before/after text, rendered as a diff by the CLI. */
+  readonly diff?: ContentChange;
 }
 
 /** A tool with its input type intact. ARCHITECTURE §3. */
@@ -99,6 +105,7 @@ export function defineTool<TInput>(tool: Tool<TInput>): RegisteredTool {
         toolName: tool.name,
         operation: classification.operation,
         detail: classification.detail,
+        ...(classification.diff ? { diff: classification.diff } : {}),
       });
       if (!approved) {
         return {

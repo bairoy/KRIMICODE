@@ -52,9 +52,7 @@ export const runCommandTool = defineTool({
     const destructive = DESTRUCTIVE.some((re) => re.test(input.command));
     return {
       operation: destructive ? 'DESTRUCTIVE' : 'EXECUTE',
-      detail: destructive
-        ? `Run a DESTRUCTIVE command: ${input.command}`
-        : `Run: ${input.command}`,
+      detail: input.command,
     };
   },
 

@@ -1,22 +1,35 @@
 import * as readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
-import { loadConfig } from './config.js';
+import { loadConfig, loadEnvFile } from './config.js';
 import { OpenAICompatibleProvider } from './provider.js';
 import { Agent } from './agent.js';
 import { registerSecret } from './redact.js';
+import {
+  createPasteFilter,
+  DISABLE_BRACKETED_PASTE,
+  ENABLE_BRACKETED_PASTE,
+} from './paste.js';
 import { PermissionGate } from './permissions.js';
 import type { AskUser, OperationClass, UserAnswer } from './permissions.js';
 import type { ToolResult } from './types.js';
+import {
+  BOLD_RED,
+  DIM,
+  RESET,
+  renderDiff,
+  YELLOW,
+} from './render.js';
 
 /** Short human labels for the approval prompt. */
 const OPERATION_LABEL: Record<OperationClass, string> = {
   READ: 'read',
   READ_SENSITIVE: 'read credential file',
-  WRITE: 'write',
+  WRITE: 'write file',
   EXECUTE: 'run command',
   DESTRUCTIVE: 'DESTRUCTIVE',
   GIT_STATE_CHANGE: 'change git state',
 };
+
 
 /**
  * Owns every byte written to stdout during a turn: the waiting spinner, dimmed
@@ -93,6 +106,7 @@ function createRenderer() {
 }
 
 async function main(): Promise<void> {
+  loadEnvFile();
   const config = loadConfig();
 
   // Scrub the exact key from anything a tool returns, on top of the
@@ -100,7 +114,25 @@ async function main(): Promise<void> {
   registerSecret(config.apiKey);
 
   const render = createRenderer();
-  const rl = readline.createInterface({ input: stdin, output: stdout });
+
+  // On a real terminal, route stdin through the bracketed-paste filter so a
+  // multi-line paste lands in the buffer instead of submitting itself. Raw
+  // mode has to be set on the real stdin, since readline only sees the filter.
+  // When stdin is a pipe there is no paste to bracket, so use it unchanged.
+  const interactive = Boolean(stdin.isTTY);
+  if (interactive) {
+    stdin.setRawMode(true);
+    stdout.write(ENABLE_BRACKETED_PASTE);
+  }
+  const rl = readline.createInterface({
+    input: interactive ? stdin.pipe(createPasteFilter()) : stdin,
+    output: stdout,
+    // Forced on when interactive, because readline sees the filter rather than
+    // the TTY and would otherwise skip line editing. Left off for a pipe, or
+    // readline emits cursor-control codes into non-terminal output.
+    terminal: interactive,
+  });
+  rl.on('SIGINT', () => rl.close()); // Ctrl-C: raw mode means we handle it
 
   /**
    * The approval prompt. Anything other than an explicit yes is a refusal —
@@ -108,20 +140,37 @@ async function main(): Promise<void> {
    * auto-approved into writing or executing something.
    */
   const askUser: AskUser = async (request): Promise<UserAnswer> => {
+    const destructive = request.operation === 'DESTRUCTIVE';
+    const accent = destructive ? BOLD_RED : YELLOW;
     const label = OPERATION_LABEL[request.operation];
-    stdout.write(`\n\x1b[33m⚠ permission: ${label}\x1b[0m\n`);
+
+    stdout.write('\n');
+    stdout.write(
+      `  ${accent}⚠ ${label}${RESET} ${DIM}via ${request.toolName}${RESET}\n`,
+    );
     stdout.write(`  ${request.detail}\n`);
+
+    if (request.diff) {
+      stdout.write('\n');
+      stdout.write(`${renderDiff(request.diff.before, request.diff.after, '    ')}\n`);
+    }
+
+    // "always" is never offered for a destructive op — the gate refuses to
+    // remember one, so offering it would be a lie.
+    const options = destructive
+      ? `${DIM}[y]${RESET}es  ${DIM}[n]${RESET}o`
+      : `${DIM}[y]${RESET}es  ${DIM}[n]${RESET}o  ${DIM}[a]${RESET}lways`;
 
     let answer: string;
     try {
-      answer = (
-        await rl.question('  allow? [y]es / [n]o / [a]lways: ')
-      ).trim().toLowerCase();
+      answer = (await rl.question(`\n  ${options} ${DIM}›${RESET} `))
+        .trim()
+        .toLowerCase();
     } catch {
       return 'no'; // stdin closed mid-prompt
     }
 
-    if (answer === 'a' || answer === 'always') return 'always';
+    if (!destructive && (answer === 'a' || answer === 'always')) return 'always';
     if (answer === 'y' || answer === 'yes') return 'once';
     return 'no';
   };
@@ -172,6 +221,13 @@ async function main(): Promise<void> {
     }
   } finally {
     rl.close();
+    // Restore the terminal, whatever happened. Leaving bracketed paste or raw
+    // mode on would corrupt the user's shell after we exit.
+    if (interactive) {
+      stdout.write(DISABLE_BRACKETED_PASTE);
+      stdin.setRawMode(false);
+      stdin.pause();
+    }
   }
 }
 
