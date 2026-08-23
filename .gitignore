@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+*.log
+
+# Personal editor/tool settings, not team config
+.claude/settings.local.json
+
+# Scratch files for manual testing
+demo/
+
+# macOS
+.DS_Store
