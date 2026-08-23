@@ -1,5 +1,6 @@
 import type { ToolSpec } from '../types.js';
 import type { RegisteredTool } from './define.js';
+import { editFileTool } from './edit_file.js';
 import { readFileTool } from './read_file.js';
 import { runCommandTool } from './run_command.js';
 
@@ -7,7 +8,11 @@ import { runCommandTool } from './run_command.js';
  * Source of truth for what the model can call. A tool that is not in this
  * array does not exist as far as the agent is concerned.
  */
-const TOOLS: readonly RegisteredTool[] = [readFileTool, runCommandTool];
+const TOOLS: readonly RegisteredTool[] = [
+  readFileTool,
+  editFileTool,
+  runCommandTool,
+];
 
 const BY_NAME = new Map(TOOLS.map((tool) => [tool.name, tool]));
 
