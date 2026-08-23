@@ -17,12 +17,23 @@ export type OperationClass =
 
 export type Decision = 'allow' | 'deny' | 'ask';
 
+/** A content change, for tools that rewrite part of a file. */
+export interface ContentChange {
+  readonly before: string;
+  readonly after: string;
+}
+
 /** What the user is being asked to approve. */
 export interface PermissionRequest {
   readonly toolName: string;
   readonly operation: OperationClass;
-  /** One line describing exactly what will happen. Shown to the user. */
+  /** The target, in one short line: a path, or a command. */
   readonly detail: string;
+  /**
+   * Optional before/after text. Kept structured rather than pre-formatted so
+   * the CLI owns rendering (ARCHITECTURE §2) and the gate stays UI-agnostic.
+   */
+  readonly diff?: ContentChange;
 }
 
 export type UserAnswer = 'once' | 'always' | 'no';
