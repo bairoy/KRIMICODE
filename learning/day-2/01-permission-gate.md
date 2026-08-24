@@ -310,6 +310,268 @@ the decision is already made and unchangeable.
 That is least privilege: a component that never receives a capability cannot
 misuse it.
 
+> **Note for later:** on Day 3 `ToolContext` gains one more field, `signal?`,
+> so a running command can be cancelled. Still no gate.
+
+---
+
+## ⭐ The full journey — every function, every field
+
+Everything above explained the pieces one at a time. This section puts them
+together: **which function calls which, and which field of which interface
+each one touches.**
+
+### 1 · The cast
+
+Five shapes are involved. Three are data, one is a function type, one is a
+class that holds state.
+
+```mermaid
+classDiagram
+    class Tool~TInput~ {
+        +string name
+        +string description
+        +ZodType inputSchema
+        +classify(input) CallClassification
+        +execute(input, context) ToolResult
+    }
+
+    class CallClassification {
+        +OperationClass operation
+        +string detail
+        +ContentChange diff  optional
+    }
+
+    class PermissionRequest {
+        +string toolName
+        +OperationClass operation
+        +string detail
+        +ContentChange diff  optional
+    }
+
+    class ContentChange {
+        +string before
+        +string after
+    }
+
+    class PermissionGate {
+        #ask AskUser
+        #sessionAllowed Set~string~
+        +check(request) Promise~boolean~
+    }
+
+    class AskUser {
+        <<function type>>
+        +call(request) Promise~UserAnswer~
+    }
+
+    Tool --> CallClassification : classify() returns
+    CallClassification --> PermissionRequest : copied into, plus tool.name
+    CallClassification --> ContentChange : diff
+    PermissionRequest --> ContentChange : diff
+    PermissionGate --> PermissionRequest : check() receives
+    PermissionGate --> AskUser : calls #ask
+```
+
+Notice `CallClassification` and `PermissionRequest` are **almost identical**.
+The only difference is `toolName`.
+
+That is on purpose. A tool describes *its own call* and genuinely does not know
+its registered name — `defineTool` adds it. **A tool cannot lie about which
+tool it is.**
+
+### 2 · The call chain
+
+Now the order things actually happen in, with the variable each step produces:
+
+```mermaid
+sequenceDiagram
+    participant AG as agent.ts
+    participant RUN as defineTool run()
+    participant TOOL as edit_file
+    participant GATE as PermissionGate.check()
+    participant CL as classify()
+    participant ASK as AskUser (the CLI)
+
+    AG->>RUN: run(argsJson, context, gate)
+
+    RUN->>RUN: JSON.parse(argsJson)
+    Note over RUN: raw : unknown
+    RUN->>RUN: tool.inputSchema.safeParse(raw)
+    Note over RUN: parsed.data : TInput<br/>now trustworthy
+
+    RUN->>TOOL: tool.classify(parsed.data)
+    TOOL->>TOOL: isSensitivePath(input.path)
+    TOOL-->>RUN: CallClassification
+    Note over RUN: classification.operation<br/>classification.detail<br/>classification.diff
+
+    RUN->>GATE: check({ toolName, operation, detail, diff })
+    Note over GATE: request : PermissionRequest
+
+    GATE->>CL: classify(request.operation)
+    CL-->>GATE: 'allow' or 'ask'
+    Note over GATE: decision
+
+    alt decision is 'allow'
+        GATE-->>RUN: true (no prompt at all)
+    else decision is 'ask'
+        GATE->>GATE: remembered = operation !== 'DESTRUCTIVE'
+        GATE->>GATE: #35;sessionAllowed.has(request.toolName)
+        alt remembered AND already in the Set
+            GATE-->>RUN: true (silent)
+        else must ask a human
+            GATE->>ASK: #35;ask(request)
+            Note over ASK: renders request.detail<br/>and request.diff
+            ASK-->>GATE: answer : UserAnswer
+            opt answer is 'always' AND remembered
+                GATE->>GATE: #35;sessionAllowed.add(request.toolName)
+            end
+            GATE-->>RUN: answer is 'once' or 'always'
+        end
+    end
+
+    alt approved
+        RUN->>TOOL: tool.execute(parsed.data, context)
+    else refused
+        RUN-->>AG: success false, retryable false
+    end
+```
+
+Read the `alt` blocks as forks in the road. Only one branch runs.
+
+### 3 · ⭐ Where every field comes from, and where it goes
+
+This is the picture the code alone does not give you. Follow any single field
+left to right.
+
+```mermaid
+flowchart LR
+    subgraph S1["1 · validated input (edit_file)"]
+        direction TB
+        IP["input.path"]
+        IO["input.old_str"]
+        INW["input.new_str"]
+        IR["input.replace_all"]
+    end
+
+    subgraph S2["2 · CallClassification (the tool builds this)"]
+        direction TB
+        CO["operation"]
+        CD["detail"]
+        CDF["diff.before / diff.after"]
+    end
+
+    subgraph S3["3 · PermissionRequest (defineTool builds this)"]
+        direction TB
+        RT["toolName"]
+        RO["operation"]
+        RD["detail"]
+        RDF["diff"]
+    end
+
+    subgraph S4["4 · locals inside check()"]
+        direction TB
+        DEC["decision"]
+        REM["remembered"]
+        ANS["answer"]
+    end
+
+    subgraph S5["5 · state that OUTLIVES the call"]
+        direction TB
+        SET["#sessionAllowed : Set of tool names"]
+    end
+
+    TN["tool.name<br/><i>from the registry</i>"] --> RT
+
+    IP -->|"isSensitivePath(path)"| CO
+    IP --> CD
+    IR -->|"adds '(all occurrences)'"| CD
+    IO --> CDF
+    INW --> CDF
+
+    CO --> RO
+    CD --> RD
+    CDF --> RDF
+
+    RO -->|"classify(operation)"| DEC
+    RO -->|"!== 'DESTRUCTIVE'"| REM
+
+    RT -->|".has() and .add()"| SET
+    REM -->|"gates BOTH"| SET
+
+    RD --> UI["what you read<br/>in the prompt"]
+    RDF --> UI
+    UI --> ANS
+    ANS -->|"only if 'always'"| SET
+
+    style CO fill:#fff3cd,stroke:#856404
+    style RO fill:#fff3cd,stroke:#856404
+    style REM fill:#f8d7da,stroke:#721c24
+    style SET fill:#cfe2ff,stroke:#084298
+```
+
+Three things worth pausing on:
+
+**`input.path` is used twice, for two different purposes.** Once to decide the
+`operation` (is this a credential file?), once to build the human-readable
+`detail`. One field, two jobs.
+
+**`operation` is the busiest field in the system.** It is produced by the tool,
+copied into the request, and then read **twice more** inside `check()` — once
+by `classify()` to get the decision, once to compute `remembered`. Everything
+hangs off it.
+
+**`#sessionAllowed` is the only thing in blue** because it is the only thing
+that survives after `check()` returns. Everything else is created and thrown
+away within a single call. That is why it is the only place a bug can *persist*.
+
+### 4 · A worked trace
+
+Same tool, three calls, in order. Watch the variables change.
+
+**Call 1 — `edit_file` on `src/agent.ts`, you answer `always`**
+
+| Step | Variable | Value |
+|---|---|---|
+| `tool.classify` | `classification.operation` | `'WRITE'` |
+| | `classification.detail` | `'src/agent.ts'` |
+| | `classification.diff` | `{ before: '...', after: '...' }` |
+| `check` | `request.toolName` | `'edit_file'` |
+| | `decision` | `'ask'` |
+| | `remembered` | `true` |
+| | `#sessionAllowed.has('edit_file')` | `false` → must ask |
+| | `answer` | `'always'` |
+| | `#sessionAllowed` after | `{ 'edit_file' }` ← **changed** |
+| | returns | `true` |
+
+**Call 2 — `edit_file` on `src/config.ts`**
+
+| Step | Variable | Value |
+|---|---|---|
+| `check` | `decision` | `'ask'` |
+| | `remembered` | `true` |
+| | `#sessionAllowed.has('edit_file')` | `true` → **return early** |
+| | `answer` | *never computed — no prompt shown* |
+| | returns | `true` |
+
+**Call 3 — `edit_file` on `.env`**
+
+| Step | Variable | Value |
+|---|---|---|
+| `tool.classify` | `classification.operation` | `'DESTRUCTIVE'` ← `isSensitivePath` |
+| `check` | `decision` | `'ask'` |
+| | `remembered` | **`false`** |
+| | `#sessionAllowed.has(...)` | *never consulted — `remembered` is false* |
+| | `answer` | `'always'` (say you answer that) |
+| | `#sessionAllowed` after | `{ 'edit_file' }` ← **unchanged** |
+| | returns | `true`, for this one call only |
+
+Call 3 is the whole safety property in one row: the standing approval from
+call 1 exists, the Set still contains `'edit_file'`, and **it is simply not
+looked at**, because `remembered` is `false`.
+
+Then a fourth call to `.env` would ask again. And a fifth. Every time.
+
 ---
 
 ## Things to remember
