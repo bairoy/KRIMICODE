@@ -56,7 +56,7 @@ sequenceDiagram
         else it fails or returns empty
             Note over A: fall back to mechanicalDigest
         end
-        A->>H: #summary = the text<br/>#history = keep
+        A->>H: #35;summary = the text<br/>#35;history = keep
     end
     A->>H: last resort — blank old tool bodies if still too big
     A->>M: NOW send the real request
