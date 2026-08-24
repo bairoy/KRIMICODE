@@ -58,6 +58,32 @@ The returned functions still have access to `spinner` and `inReasoning` after
 The variables are genuinely private — no code outside can reach them. It's a
 class-like object without the `class` keyword.
 
+## Concept 3 — The renderer is a little state machine
+
+The renderer has to know what it is currently printing, because moving between
+states needs cleanup — stop the spinner, close the dim block, and so on.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Waiting: you press Enter
+    Waiting --> Reasoning: first reasoning delta
+    Waiting --> Text: first text delta
+    Waiting --> Tool: model asks for a tool
+
+    Reasoning --> Text: answer starts<br/>(reset dim, blank line)
+    Reasoning --> Tool: tool starts<br/>(reset dim)
+
+    Tool --> Waiting: tool finished
+
+    Text --> [*]: turn ends
+    Tool --> [*]: turn ends
+    Waiting --> [*]: turn ends
+```
+
+Every arrow leaving `Reasoning` has to **reset the dim colour first**. Miss one
+and the user's shell stays dim forever. That is why `end()` runs in a `finally`
+— it is the arrow that must fire no matter what happened.
+
 ---
 
 ## The code

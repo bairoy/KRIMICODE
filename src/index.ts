@@ -3,6 +3,7 @@ import { stdin, stdout } from 'node:process';
 import { loadConfig, loadEnvFile } from './config.js';
 import { OpenAICompatibleProvider } from './provider.js';
 import { Agent } from './agent.js';
+import type { CompactionInfo } from './agent.js';
 import { registerSecret } from './redact.js';
 import {
   createPasteFilter,
@@ -86,6 +87,19 @@ function createRenderer() {
         argsJson.length > 120 ? `${argsJson.slice(0, 120)}…` : argsJson;
       stdout.write(`\n\x1b[36m⚒ ${name}\x1b[0m \x1b[2m${args}\x1b[0m\n`);
     },
+    /**
+     * History was folded into a summary. Worth surfacing: the model has just
+     * lost detail it previously had, and silently forgetting things is the
+     * kind of behaviour that reads as the agent being broken.
+     */
+    compacted(info: CompactionInfo): void {
+      clearSpinner();
+      const note = info.fallback ? ', summary unavailable — used a digest' : '';
+      stdout.write(
+        `\n${DIM}⟳ compacted context: ~${info.tokensBefore} → ~${info.tokensAfter} tokens, ` +
+          `${info.messagesElided} message${info.messagesElided === 1 ? '' : 's'} summarized${note}${RESET}\n`,
+      );
+    },
     toolEnd(result: ToolResult): void {
       stdout.write(
         result.success
@@ -132,7 +146,22 @@ async function main(): Promise<void> {
     // readline emits cursor-control codes into non-terminal output.
     terminal: interactive,
   });
-  rl.on('SIGINT', () => rl.close()); // Ctrl-C: raw mode means we handle it
+  /**
+   * The turn in flight, or null while waiting for input. Ctrl-C means "stop
+   * what you are doing" during a turn and "quit" when there is nothing to
+   * stop — the same key, read from context, as in any shell.
+   */
+  let active: AbortController | null = null;
+
+  // Raw mode means SIGINT arrives here as a readline event rather than as a
+  // process signal, so this is the only handler.
+  rl.on('SIGINT', () => {
+    if (active === null) {
+      rl.close();
+      return;
+    }
+    active.abort();
+  });
 
   /**
    * The approval prompt. Anything other than an explicit yes is a refusal —
@@ -163,11 +192,19 @@ async function main(): Promise<void> {
 
     let answer: string;
     try {
-      answer = (await rl.question(`\n  ${options} ${DIM}›${RESET} `))
+      // The signal makes Ctrl-C dismiss the prompt. Without it the question
+      // stays pending forever and the cancelled turn never finishes.
+      const signal = active?.signal;
+      answer = (
+        await rl.question(
+          `\n  ${options} ${DIM}›${RESET} `,
+          signal ? { signal } : {},
+        )
+      )
         .trim()
         .toLowerCase();
     } catch {
-      return 'no'; // stdin closed mid-prompt
+      return 'no'; // stdin closed mid-prompt, or the turn was cancelled
     }
 
     if (!destructive && (answer === 'a' || answer === 'always')) return 'always';
@@ -189,10 +226,18 @@ async function main(): Promise<void> {
       render.toolEnd(result);
       render.waiting(); // back to waiting on the model
     },
+    maxContextTokens: config.maxContextTokens,
+    onCompact: (info) => {
+      render.compacted(info);
+      render.waiting();
+    },
   });
 
   // baseURL and model are not secrets. apiKey is never printed.
-  console.log(`krimicode — ${config.model} @ ${config.baseURL}`);
+  console.log(
+    `krimicode — ${config.model} @ ${config.baseURL} ` +
+      `${DIM}(context ${config.maxContextTokens} tokens)${RESET}`,
+  );
   console.log('/exit or Ctrl-C to quit.\n');
 
   try {
@@ -207,8 +252,9 @@ async function main(): Promise<void> {
       if (line === '/exit') break;
 
       render.waiting();
+      active = new AbortController();
       try {
-        await agent.send(line);
+        await agent.send(line, active.signal);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         const hint = /ECONNREFUSED|fetch failed|ENOTFOUND/i.test(msg)
@@ -216,7 +262,12 @@ async function main(): Promise<void> {
           : '';
         console.error(`\nerror: ${msg}${hint}\n`);
       } finally {
+        const cancelled = active.signal.aborted;
+        // Cleared before rendering, so a Ctrl-C landing in this window is read
+        // as "quit" rather than aborting a controller nothing is watching.
+        active = null;
         render.end();
+        if (cancelled) stdout.write(`${DIM}cancelled${RESET}\n\n`);
       }
     }
   } finally {

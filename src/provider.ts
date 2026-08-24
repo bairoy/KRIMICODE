@@ -149,6 +149,14 @@ export class OpenAICompatibleProvider implements ModelProvider {
 
       yield { type: 'done', stopReason };
     } catch (err) {
+      // A cancelled request is not a failure. Reporting it as an error would
+      // surface an SDK abort message to the user and, worse, make the agent
+      // throw on a path the user deliberately chose.
+      if (request.signal?.aborted) {
+        yield { type: 'done', stopReason: 'cancelled' };
+        return;
+      }
+
       // Message only. Never surface the error object — SDK errors can carry
       // request details including headers.
       yield {

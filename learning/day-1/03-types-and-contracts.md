@@ -42,6 +42,34 @@ and `shape.side` would be an error. You get this for free, with no casts.
 Why this matters: it makes illegal states impossible. There is no way to build a
 `Shape` that has both `radius` and `side`, or neither.
 
+```mermaid
+flowchart TD
+    S["a value of type Shape"] --> Q{"check shape.kind"}
+    Q -->|"'circle'"| C["TypeScript now KNOWS:<br/>radius exists<br/>side does NOT"]
+    Q -->|"'square'"| SQ["TypeScript now KNOWS:<br/>side exists<br/>radius does NOT"]
+```
+
+One field tells you which shape you have, and the compiler follows along.
+
+---
+
+## The four kinds of message
+
+We use the same trick for conversation history. `role` is the discriminant:
+
+```mermaid
+flowchart TD
+    M["Message"] --> R{"role"}
+    R -->|system| S["content<br/><i>the standing instructions</i>"]
+    R -->|user| U["content<br/><i>what you typed</i>"]
+    R -->|assistant| A["content<br/>toolCalls?<br/><i>what the model said,<br/>plus any tools it wants</i>"]
+    R -->|tool| T["content<br/>toolCallId<br/><i>the answer to one tool call</i>"]
+```
+
+Notice the last two. `assistant` may carry `toolCalls`; `tool` carries a
+`toolCallId`. **Those two ids must match up** — that pairing becomes very
+important on Day 3.
+
 ---
 
 ## The code

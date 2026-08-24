@@ -74,6 +74,50 @@ chunk N: { delta: {}, finish_reason: "stop" }
 
 Your job as the receiver is to reassemble them.
 
+```mermaid
+flowchart LR
+    C1["'The'"] --> ACC
+    C2["' scripts'"] --> ACC
+    C3["' are'"] --> ACC
+    C4["' dev, build, test'"] --> ACC
+    ACC["glue them together<br/>as they arrive"] --> OUT["The scripts are dev, build, test"]
+    ACC -.->|"print each piece<br/>immediately"| SCREEN["your terminal fills in<br/>progressively"]
+```
+
+Two things happen at once: we **show** each piece the moment it lands, and we
+**collect** the pieces so we end up with the whole answer.
+
+### Why tool calls are harder
+
+Text is easy — just glue it end to end. A tool call is not, because it arrives
+in *pieces across several chunks*, and several tool calls can arrive
+**interleaved**:
+
+```mermaid
+flowchart TD
+    subgraph CHUNKS["what actually arrives, in this order"]
+        direction TB
+        K1["index 0 · id abc · name read_file"]
+        K2["index 1 · id xyz · name search_code"]
+        K3["index 0 · args fragment 1"]
+        K4["index 1 · args fragment 1"]
+        K5["index 0 · args fragment 2"]
+        K6["index 1 · args fragment 2"]
+    end
+
+    CHUNKS --> ACC2["group by <b>index</b><br/>set id and name ONCE<br/>append every args fragment"]
+
+    ACC2 --> R1["call 0 · read_file · path = a.ts"]
+    ACC2 --> R2["call 1 · search_code · pattern = foo"]
+```
+
+**`index` is the only field guaranteed to be on every piece.** The `id` and
+`name` arrive once, usually on the first piece. The `args` arrive as fragments
+that must be appended in order.
+
+That is why the accumulator exists, and why it groups by `index` rather than by
+`id`.
+
 ---
 
 ## The code

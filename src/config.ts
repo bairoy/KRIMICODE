@@ -8,7 +8,19 @@ const EnvSchema = z.object({
     .refine((v) => URL.canParse(v), 'must be a valid URL'),
   MODEL_NAME: z.string().min(1, 'is required'),
   EXTRA_BODY: z.string().optional(),
+  // The model's context window. There is no portable way to ask an
+  // OpenAI-compatible endpoint how large its window is, so it is configuration
+  // rather than a guess. Set it below the real limit if unsure: compacting
+  // early costs a summarization call, whereas guessing high costs the session.
+  MAX_CONTEXT_TOKENS: z.coerce
+    .number()
+    .int('must be a whole number')
+    .min(4_000, 'must be at least 4000')
+    .optional(),
 });
+
+/** Windows smaller than this are rare, and the cost of guessing high is a dead session. */
+const DEFAULT_MAX_CONTEXT_TOKENS = 128_000;
 
 export interface Config {
   readonly apiKey: string;
@@ -17,6 +29,8 @@ export interface Config {
   readonly workspaceRoot: string;
   /** Vendor-specific request-body fields. Opaque to the provider. */
   readonly extraBody: Record<string, unknown>;
+  /** Context window the compaction policy is built from. */
+  readonly maxContextTokens: number;
 }
 
 /**
@@ -71,5 +85,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     model: parsed.data.MODEL_NAME,
     workspaceRoot: process.cwd(),
     extraBody,
+    maxContextTokens:
+      parsed.data.MAX_CONTEXT_TOKENS ?? DEFAULT_MAX_CONTEXT_TOKENS,
   };
 }

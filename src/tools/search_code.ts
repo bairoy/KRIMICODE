@@ -52,9 +52,17 @@ const SEARCH_TIMEOUT_MS = 20_000;
  */
 let ripgrepAvailable: boolean | null = null;
 
-async function hasRipgrep(cwd: string): Promise<boolean> {
+async function hasRipgrep(cwd: string, signal?: AbortSignal): Promise<boolean> {
   if (ripgrepAvailable === null) {
-    const probe = await runProgram('rg', ['--version'], { cwd, timeoutMs: 5_000 });
+    const probe = await runProgram('rg', ['--version'], {
+      cwd,
+      timeoutMs: 5_000,
+      signal,
+    });
+    // A cancelled probe says nothing about whether ripgrep is installed.
+    // Caching it would let a single Ctrl-C downgrade the session to grep for
+    // good, with no way to recover short of a restart.
+    if (probe.cancelled) return false;
     ripgrepAvailable = probe.success;
   }
   return ripgrepAvailable;
@@ -109,7 +117,7 @@ export const searchCodeTool = defineTool({
       throw err;
     }
 
-    const useRipgrep = await hasRipgrep(context.workspaceRoot);
+    const useRipgrep = await hasRipgrep(context.workspaceRoot, context.signal);
     const [program, args] = useRipgrep
       ? (['rg', ripgrepArgs(input, target)] as const)
       : (['grep', grepArgs(input, target)] as const);
@@ -117,6 +125,7 @@ export const searchCodeTool = defineTool({
     const result = await runProgram(program, args, {
       cwd: context.workspaceRoot,
       timeoutMs: SEARCH_TIMEOUT_MS,
+      signal: context.signal,
     });
 
     if (result.timedOut) {

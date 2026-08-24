@@ -23,6 +23,26 @@ test('a valid environment produces config', () => {
   assert.deepEqual(config.extraBody, {});
 });
 
+test('MAX_CONTEXT_TOKENS defaults when unset', () => {
+  assert.equal(loadConfig(env()).maxContextTokens, 128_000);
+});
+
+test('MAX_CONTEXT_TOKENS is coerced from its string form', () => {
+  // Everything in the environment is a string; a config value typed as number
+  // that silently stayed a string would break the arithmetic in the policy.
+  const config = loadConfig(env({ MAX_CONTEXT_TOKENS: '32000' }));
+  assert.equal(config.maxContextTokens, 32_000);
+  assert.equal(typeof config.maxContextTokens, 'number');
+});
+
+test('an implausibly small or non-numeric context window is rejected', () => {
+  // A window of "8" would put every conversation permanently over budget and
+  // compact on every single request.
+  assert.throws(() => loadConfig(env({ MAX_CONTEXT_TOKENS: '8' })), /MAX_CONTEXT_TOKENS/);
+  assert.throws(() => loadConfig(env({ MAX_CONTEXT_TOKENS: 'lots' })), /MAX_CONTEXT_TOKENS/);
+  assert.throws(() => loadConfig(env({ MAX_CONTEXT_TOKENS: '32000.5' })), /MAX_CONTEXT_TOKENS/);
+});
+
 test('unrelated environment variables are ignored', () => {
   const config = loadConfig(env({ PATH: '/usr/bin', HOME: '/home/x' }));
   assert.equal(config.model, 'test-model');

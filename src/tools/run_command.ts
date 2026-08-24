@@ -60,6 +60,7 @@ export const runCommandTool = defineTool({
     const result = await runCommand(input.command, {
       cwd: context.workspaceRoot,
       ...(input.timeout_ms !== undefined ? { timeoutMs: input.timeout_ms } : {}),
+      signal: context.signal,
     });
 
     const sections: string[] = [];

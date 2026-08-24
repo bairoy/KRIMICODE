@@ -56,6 +56,7 @@ export const gitDiffTool = defineTool({
       cwd: context.workspaceRoot,
       timeoutMs: 20_000,
       maxOutputChars: MAX_OUTPUT_CHARS,
+      signal: context.signal,
     });
 
     if (result.exitCode === NOT_A_REPO) {

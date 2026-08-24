@@ -10,23 +10,31 @@ carry the extensibility."*
 
 ## The concept, once more
 
-```
-push user message
-        │
-        ▼
-  ┌──► ask the model ──► did it request tools?
-  │                            │
-  │              no ───────────┴────► push its answer, RETURN
-  │                            │
-  │             yes            ▼
-  │                    for each tool call:
-  │                      - run it
-  │                      - push the result as a message
-  │                            │
-  └────────────────────────────┘
+```mermaid
+flowchart TD
+    START(["send('read package.json')"]) --> PUSH["push your message<br/>into the history"]
+    PUSH --> ASK["ask the model<br/><i>sending the WHOLE history</i>"]
+    ASK --> Q{"did it ask<br/>for tools?"}
+
+    Q -->|no| ANS["push its answer<br/>into the history"] --> DONE(["return — your turn is over"])
+
+    Q -->|yes| PUSHA["push its request<br/>into the history"]
+    PUSHA --> LOOP["for each tool it asked for:<br/>1 · run it<br/>2 · push the result<br/>as a 'tool' message"]
+    LOOP --> GUARD{"hit the<br/>turn limit?"}
+    GUARD -->|no| ASK
+    GUARD -->|yes| STOP(["give up — runaway guard"])
 ```
 
 The loop ends when the model stops asking for tools.
+
+Read the diagram once more and notice three things:
+
+1. **The history only ever grows.** Every box that says "push" adds to it, and
+   the whole thing is re-sent on the next `ask`. (This is exactly the problem
+   Day 3 has to solve.)
+2. **We never decide the number of trips.** The model does, by choosing whether
+   to ask for a tool.
+3. **There is a hard ceiling anyway.** That is `MAX_TURNS`, below.
 
 ---
 
@@ -54,6 +62,9 @@ again, repeat. Every iteration is a paid API call and a growing context window.
 
 We added this **before** any tool existed. That's the right instinct: build the
 safety limit while you're thinking about it, not after it bites you.
+
+> **Note:** this started at 25 and is **30** in the code today. The number is a
+> judgement call, not a magic constant — what matters is that a ceiling exists.
 
 ### The system prompt
 

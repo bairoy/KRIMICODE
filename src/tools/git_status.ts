@@ -26,7 +26,7 @@ export const gitStatusTool = defineTool({
     const result = await runProgram(
       'git',
       ['status', '--porcelain=v1', '--branch'],
-      { cwd: context.workspaceRoot, timeoutMs: 15_000 },
+      { cwd: context.workspaceRoot, timeoutMs: 15_000, signal: context.signal },
     );
 
     if (result.exitCode === NOT_A_REPO) {

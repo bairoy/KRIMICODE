@@ -15,6 +15,12 @@ import type { ToolResult } from '../types.js';
  */
 export interface ToolContext {
   readonly workspaceRoot: string;
+  /**
+   * Aborted when the user cancels the turn. Tools that spawn a process must
+   * forward it to `runCommand`/`runProgram`, or a cancelled `npm test` keeps
+   * running with nothing left to reap it.
+   */
+  readonly signal?: AbortSignal;
 }
 
 /** How a specific call should be classified, given its validated input. */
@@ -94,6 +100,16 @@ export function defineTool<TInput>(tool: Tool<TInput>): RegisteredTool {
           success: false,
           error: `Invalid arguments: ${detail}`,
           retryable: true,
+        };
+      }
+
+      // Checked before the gate, so cancelling a turn cannot leave an approval
+      // prompt on screen for work that will never run.
+      if (context.signal?.aborted) {
+        return {
+          success: false,
+          error: 'Cancelled by the user before the call ran.',
+          retryable: false,
         };
       }
 
