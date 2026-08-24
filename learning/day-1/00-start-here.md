@@ -34,27 +34,25 @@ steps, comes out the other end. Step 1 → Step 2 → Step 3 → done.
 
 Our agent is a **loop**.
 
+```mermaid
+flowchart LR
+    subgraph PIPE["A normal program — a pipeline"]
+        direction LR
+        P1["Step 1"] --> P2["Step 2"] --> P3["Step 3"] --> P4["Done"]
+    end
 ```
-You ask a question
-        │
-        ▼
-   Send everything to the model
-        │
-        ▼
-   Model replies. Two possibilities:
-        │
-        ├─── "Here is my answer"  ──────────►  Show the user. Done.
-        │
-        └─── "First, run read_file for me"
-                     │
-                     ▼
-              We run the tool
-                     │
-                     ▼
-              We add the result to the conversation
-                     │
-                     └──────────────► go back to "Send everything to the model"
+
+```mermaid
+flowchart TD
+    A["You ask a question"] --> B["Send the WHOLE conversation to the model"]
+    B --> C{"What did the model reply?"}
+    C -->|"Here is my answer"| D["Show the user — done"]
+    C -->|"First, run read_file for me"| E["We run the tool"]
+    E --> F["Add the result to the conversation"]
+    F --> B
 ```
+
+See the arrow going back up? That is the whole difference.
 
 The model can go around that loop many times before answering. It might read
 one file, realise it needs another, read that too, and only then answer.
@@ -77,6 +75,26 @@ So we make a deal with it:
    `{"path": "package.json"}`."*
 3. **We** run it. We decide whether it's allowed. We do the actual file read.
 4. We hand the result back and ask the model to continue.
+
+Here is that deal as a conversation:
+
+```mermaid
+sequenceDiagram
+    participant You
+    participant Code as Our code
+    participant Model
+
+    You->>Code: "what scripts are in package.json?"
+    Code->>Model: the question + "here are the tools you may ask for"
+    Model-->>Code: "please run read_file with {path: package.json}"
+    Note over Code: We check if it is allowed.<br/>We do the actual reading.
+    Code->>Code: read the file from disk
+    Code->>Model: "here is the file content"
+    Model-->>Code: "the scripts are dev, build, test"
+    Code-->>You: prints the answer
+```
+
+Look at who does what. The model **asks**. Our code **acts**.
 
 The model never executes anything. It only ever *asks*. Every actual action
 happens in our code, where we can check it first.
@@ -106,41 +124,19 @@ src/
 
 ## How the pieces talk to each other
 
-```
-   You type
-      │
-      ▼
- ┌──────────┐
- │ index.ts │  ← owns the terminal: input, colours, spinner
- └────┬─────┘
-      │ agent.send("read package.json")
-      ▼
- ┌──────────┐         ┌─────────────┐        ┌────────────┐
- │ agent.ts │ ──────► │ provider.ts │ ─HTTP─►│ the model  │
- │          │ ◄────── │             │ ◄──────│            │
- │ the loop │         └─────────────┘        └────────────┘
- │          │
- │          │  model asked for a tool
- │          │         │
- │          ▼         ▼
- │    ┌───────────────────┐
- │    │ tools/index.ts    │  find the tool by name
- │    └────────┬──────────┘
- │             ▼
- │    ┌───────────────────┐
- │    │ tools/define.ts   │  parse JSON, validate with Zod
- │    └────────┬──────────┘
- │             ▼
- │    ┌───────────────────┐
- │    │ tools/read_file.ts│  check path, read file
- │    └────────┬──────────┘
- │             ▼
- │    ┌───────────────────┐
- └────┤ normalize.ts      │  redact secrets, cap size
-      └───────────────────┘
-              │
-              ▼
-      result goes back into the conversation, loop continues
+```mermaid
+flowchart TD
+    You(["You type"]) --> IDX["index.ts<br/>owns the terminal:<br/>input, colours, spinner"]
+    IDX -->|"agent.send('read package.json')"| AG["agent.ts<br/>THE LOOP"]
+
+    AG <-->|"stream()"| PR["provider.ts<br/>speaks the API format"]
+    PR <-->|HTTP| M(["the model"])
+
+    AG -->|"the model asked for a tool"| REG["tools/index.ts<br/>find the tool by name"]
+    REG --> DEF["tools/define.ts<br/>parse JSON + validate with Zod"]
+    DEF --> RF["tools/read_file.ts<br/>check the path, read the file"]
+    RF --> NRM["normalize.ts<br/>redact secrets, cap the size"]
+    NRM -->|"result rejoins the conversation"| AG
 ```
 
 ## The rule behind the design
@@ -161,6 +157,29 @@ We used this three times on Day 1:
   is the only way to make a tool.
 - Every file path is checked → because `resolveInWorkspace()` is the only way a
   tool gets an absolute path.
+
+Picture the difference:
+
+```mermaid
+flowchart LR
+    subgraph BAD["❌ Many roads — every author must remember"]
+        direction LR
+        T1["tool A"] --> C1["conversation"]
+        T2["tool B"] --> C1
+        T3["tool C forgot<br/>to redact"] -->|"secret leaks"| C1
+    end
+```
+
+```mermaid
+flowchart LR
+    subgraph GOOD["✅ One road — the rule lives on the road"]
+        direction LR
+        U1["tool A"] --> N["normalize.ts<br/>redact + cap"]
+        U2["tool B"] --> N
+        U3["tool C"] --> N
+        N --> C2["conversation"]
+    end
+```
 
 A future tool *cannot* skip these. Not "shouldn't" — **cannot**. That is a much
 stronger guarantee than a comment saying "remember to redact".

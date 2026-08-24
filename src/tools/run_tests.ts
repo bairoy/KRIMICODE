@@ -63,6 +63,7 @@ export const runTestsTool = defineTool({
       cwd: context.workspaceRoot,
       timeoutMs: input.timeout_ms ?? DEFAULT_TIMEOUT_MS,
       maxOutputChars: MAX_OUTPUT_CHARS,
+      signal: context.signal,
     });
 
     const sections: string[] = [];

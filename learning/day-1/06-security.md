@@ -46,6 +46,41 @@ Three ways out of a folder:
 The third is the sneaky one. `project/notes.txt` can be a symlink to
 `/etc/passwd`. The path looks perfectly innocent.
 
+Here is the defence, in order:
+
+```mermaid
+flowchart TD
+    IN["path from the model<br/>e.g. 'notes.txt' or '../../etc/passwd'"] --> RES["resolve() it against<br/>the workspace root"]
+    RES --> REAL["realpath() it<br/><i>follows every symlink to<br/>the REAL file on disk</i>"]
+    REAL --> CHK{"does the real path start<br/>with realRoot + separator?"}
+    CHK -->|yes| OK["allowed ✅"]
+    CHK -->|no| NO["WorkspaceError ❌<br/><i>refused, never even prompted</i>"]
+```
+
+**Why `realpath` before the check, not after?** Because a symlink lies about
+where it goes. `resolve()` alone would say `project/notes.txt` is safely inside
+the project. Only after following the link do you learn it lands on
+`/etc/passwd`.
+
+> **Check the destination, not the label.**
+
+**Why `+ separator` on the root?** Without it, a *sibling* folder whose name
+merely starts the same way would slip through:
+
+```mermaid
+flowchart TD
+    A["the file we are checking is<br/>/home/me/project-secrets/keys.txt"]
+    A --> B{"does it start with<br/>/home/me/project"}
+    A --> C{"does it start with<br/>/home/me/project/"}
+    B -->|"yes — but this is a DIFFERENT folder"| BAD["❌ wrongly allowed"]
+    C -->|"no"| GOOD["✅ correctly blocked"]
+
+    style BAD fill:#f8d7da,stroke:#721c24
+    style GOOD fill:#d4edda,stroke:#155724
+```
+
+That one character is the whole fix. There is a regression test named after it.
+
 ## The code
 
 ```ts
@@ -421,6 +456,34 @@ If a tool returns a 10 MB log file, it fills the entire window. The model
 slower.
 
 So: **every tool output needs a cap.** No exceptions.
+
+We keep the **head and the tail**, not just the head:
+
+```mermaid
+flowchart LR
+    IN["200,000 characters<br/>of command output"] --> CUT
+
+    subgraph CUT["capOutput()"]
+        direction TB
+        H["first 20,000<br/><i>the shape of the output</i>"]
+        E["[... 170,000 characters elided ...]"]
+        T["last 10,000<br/><i>the error / the conclusion</i>"]
+    end
+
+    CUT --> OUT["30,000 characters<br/>+ an honest marker"]
+```
+
+**Why keep the tail?** Because for test runs, builds and stack traces, the
+answer you actually want — "3 tests failed" — is at the **end**. A plain
+`slice(0, 30000)` would throw away the only part that mattered.
+
+And the order matters:
+
+```mermaid
+flowchart LR
+    R["redact secrets"] --> C["then cap the size"]
+    R -.->|"if you swap these..."| X["a secret sitting on the cut point<br/>gets sliced in half, no longer matches<br/>the pattern, and half of it leaks"]
+```
 
 ## The code
 

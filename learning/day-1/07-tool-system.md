@@ -14,26 +14,32 @@ Three files:
 
 From `ARCHITECTURE.md` §4:
 
-```
-model requests a tool
-        ↓
-parse the JSON arguments        ← define.ts
-        ↓
-validate against the schema     ← define.ts
-        ↓
-permission gate                 ← Step 4, not built yet
-        ↓
-run the handler                 ← read_file.ts
-        ↓
-normalize the result            ← normalize.ts
-        ↓
-cap the output                  ← normalize.ts
-        ↓
-add to the conversation         ← agent.ts
+```mermaid
+flowchart TD
+    M(["model requests a tool"]) --> P["parse the JSON arguments<br/><i>define.ts</i>"]
+    P -->|"bad JSON"| F1["fail · retryable: true<br/><i>the model can re-send</i>"]
+    P --> V["validate against the schema<br/><i>define.ts</i>"]
+    V -->|"wrong shape"| F2["fail · retryable: true"]
+    V --> G["permission gate<br/><i>Day 2 — not built yet</i>"]
+    G -->|"user says no"| F3["fail · retryable: false<br/><i>no means no</i>"]
+    G --> H["run the handler<br/><i>read_file.ts</i>"]
+    H --> N["normalize: redact secrets<br/><i>normalize.ts</i>"]
+    N --> C["cap the output size<br/><i>normalize.ts</i>"]
+    C --> A["add to the conversation<br/><i>agent.ts</i>"]
+
+    F1 --> A
+    F2 --> A
+    F3 --> A
 ```
 
-Never reorder these. Validation before the handler means a tool never receives
-garbage. Capping last means nothing escapes the size limit.
+**Never reorder these.** Two orderings in particular are load-bearing:
+
+- **Validation before the handler** — so a tool never receives garbage.
+- **Redact before cap** — so a secret sitting on the cut point cannot be
+  sliced in half and survive as a fragment that no longer matches the pattern.
+
+And notice every failure path still ends at "add to the conversation". A failed
+tool is *information for the model*, never a crash.
 
 ---
 
@@ -54,6 +60,27 @@ const tools = [readFileTool, runCommandTool];   // what type is this array?
 
 The answer is **type erasure**: wrap each tool so that from the outside they all
 look identical, while the typed version stays safe on the inside.
+
+```mermaid
+flowchart LR
+    subgraph INSIDE["Inside — fully typed, each one different"]
+        A["Tool&lt;{path: string}&gt;"]
+        B["Tool&lt;{command: string}&gt;"]
+        C["Tool&lt;{pattern: string}&gt;"]
+    end
+
+    A --> D["defineTool()"]
+    B --> D
+    C --> D
+
+    D --> E["RegisteredTool<br/>run(argsJson, context, gate)"]
+
+    E --> F["one array holds them all<br/><i>the registry</i>"]
+```
+
+Think of it like putting different-shaped objects into identical boxes. From
+outside, every box has the same handle: `run(argsJson, ...)`. Inside the box,
+the original shape is still known and still checked.
 
 ## The two interfaces
 

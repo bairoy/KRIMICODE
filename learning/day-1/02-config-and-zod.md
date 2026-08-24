@@ -10,6 +10,29 @@ back a clean object. It is the first "boundary" in the program.
 A **boundary** is any place where data enters your program from outside. On the
 other side of a boundary, you control nothing.
 
+Think of it as a wall around your code. Everything inside is yours. Everything
+crossing in must be searched at the gate.
+
+```mermaid
+flowchart LR
+    subgraph OUT["Outside — you control NOTHING"]
+        E["environment<br/>variables"]
+        M["model output"]
+        A["tool arguments"]
+        F["file contents"]
+        R["API responses"]
+    end
+
+    E --> V{{"validate<br/>at runtime<br/>(Zod)"}}
+    M --> V
+    A --> V
+    F --> V
+    R --> V
+
+    V -->|"shape is proven"| IN["Inside — now you can trust the type"]
+    V -->|"shape is wrong"| X["reject with a clear message"]
+```
+
 Our boundaries:
 
 | Boundary | Why it's untrusted |
@@ -56,8 +79,25 @@ const EnvSchema = z.object({
 });
 ```
 
+> **Note for later:** on Day 3 we add one more variable here,
+> `MAX_CONTEXT_TOKENS`. The shape of this schema is the same; there is just one
+> more line. See `day-3/01-the-context-problem.md`.
+
 **What is a schema?** A description of the shape data *must* have. Not a type —
 an actual object that exists at runtime and can inspect values.
+
+The difference between a TypeScript type and a Zod schema, in one picture:
+
+```mermaid
+flowchart TD
+    subgraph TS["TypeScript type"]
+        T1["exists while you write code"] --> T2["compiled away"] --> T3["at runtime: GONE<br/>checks nothing"]
+    end
+
+    subgraph ZOD["Zod schema"]
+        Z1["exists while you write code"] --> Z2["still there after compiling"] --> Z3["at runtime: REAL OBJECT<br/>inspects the actual value"]
+    end
+```
 
 Reading it:
 

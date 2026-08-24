@@ -7,6 +7,8 @@ export interface CommandResult {
   readonly stderr: string;
   readonly exitCode: number | null;
   readonly timedOut: boolean;
+  /** Killed because the caller aborted, as opposed to hitting the timeout. */
+  readonly cancelled: boolean;
   readonly durationMs: number;
 }
 
@@ -15,6 +17,11 @@ export interface RunCommandOptions {
   readonly timeoutMs?: number;
   /** Per-stream character budget. Bounds memory while the command runs. */
   readonly maxOutputChars?: number;
+  /**
+   * Kills the process group when aborted. Without this, Ctrl-C leaves a long
+   * `npm test` or `sleep 300` running with nothing left to reap it.
+   */
+  readonly signal?: AbortSignal;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -102,6 +109,20 @@ function spawnAndCollect(
   const maxOutputChars = options.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS;
   const startedAt = Date.now();
 
+  // Already cancelled before we got here: don't spawn at all. Starting a
+  // process only to immediately kill it can still leave side effects behind.
+  if (options.signal?.aborted) {
+    return Promise.resolve({
+      success: false,
+      stdout: '',
+      stderr: 'Cancelled before the command started.',
+      exitCode: null,
+      timedOut: false,
+      cancelled: true,
+      durationMs: 0,
+    });
+  }
+
   return new Promise<CommandResult>((resolve) => {
     const child = spawn(file, [...args], {
       cwd: options.cwd,
@@ -113,7 +134,25 @@ function spawnAndCollect(
     const out = createCollector(maxOutputChars);
     const err = createCollector(maxOutputChars);
     let timedOut = false;
+    let cancelled = false;
     let settled = false;
+
+    /** Both kill paths are identical; only the reason recorded differs. */
+    const terminate = (): void => {
+      const pid = child.pid;
+      if (pid === undefined) return;
+
+      killGroup(pid, 'SIGTERM');
+      // Escalate for anything that ignores SIGTERM. unref() so this timer
+      // alone cannot keep the process alive.
+      setTimeout(() => killGroup(pid, 'SIGKILL'), GRACE_MS).unref();
+    };
+
+    const onAbort = (): void => {
+      cancelled = true;
+      terminate();
+    };
+    options.signal?.addEventListener('abort', onAbort, { once: true });
 
     child.stdout?.setEncoding('utf8');
     child.stderr?.setEncoding('utf8');
@@ -122,30 +161,29 @@ function spawnAndCollect(
 
     const timer = setTimeout(() => {
       timedOut = true;
-      const pid = child.pid;
-      if (pid === undefined) return;
-
-      killGroup(pid, 'SIGTERM');
-      // Escalate for anything that ignores SIGTERM. unref() so this timer
-      // alone cannot keep the process alive.
-      setTimeout(() => killGroup(pid, 'SIGKILL'), GRACE_MS).unref();
+      terminate();
     }, timeoutMs);
 
     const finish = (exitCode: number | null, spawnError?: string): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      // Detach from the signal. A single AbortController covers every command
+      // in one turn, so leaving these attached would accumulate listeners
+      // across a long-running session.
+      options.signal?.removeEventListener('abort', onAbort);
 
       const stderr = spawnError
         ? `${err.value()}${err.value() ? '\n' : ''}${spawnError}`
         : err.value();
 
       resolve({
-        success: !timedOut && exitCode === 0,
+        success: !timedOut && !cancelled && exitCode === 0,
         stdout: out.value(),
         stderr,
         exitCode,
         timedOut,
+        cancelled,
         durationMs: Date.now() - startedAt,
       });
     };
