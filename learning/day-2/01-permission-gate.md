@@ -504,10 +504,10 @@ flowchart LR
     UI --> ANS
     ANS -->|"only if 'always'"| SET
 
-    style CO fill:#fff3cd,stroke:#856404
-    style RO fill:#fff3cd,stroke:#856404
-    style REM fill:#f8d7da,stroke:#721c24
-    style SET fill:#cfe2ff,stroke:#084298
+    style CO fill:#fff3cd,stroke:#856404,color:#4d3a02
+    style RO fill:#fff3cd,stroke:#856404,color:#4d3a02
+    style REM fill:#f8d7da,stroke:#721c24,color:#4a0f16
+    style SET fill:#cfe2ff,stroke:#084298,color:#052c65
 ```
 
 Three things worth pausing on:

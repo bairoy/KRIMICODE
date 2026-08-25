@@ -75,8 +75,8 @@ flowchart TD
     B -->|"yes — but this is a DIFFERENT folder"| BAD["❌ wrongly allowed"]
     C -->|"no"| GOOD["✅ correctly blocked"]
 
-    style BAD fill:#f8d7da,stroke:#721c24
-    style GOOD fill:#d4edda,stroke:#155724
+    style BAD fill:#f8d7da,stroke:#721c24,color:#4a0f16
+    style GOOD fill:#d4edda,stroke:#155724,color:#0b2e13
 ```
 
 That one character is the whole fix. There is a regression test named after it.

@@ -76,8 +76,8 @@ flowchart TD
     D --> A
     N --> A["add to the conversation<br/><i>agent.ts</i>"]
 
-    style CL fill:#fff3cd,stroke:#856404
-    style G fill:#f8d7da,stroke:#721c24
+    style CL fill:#fff3cd,stroke:#856404,color:#4d3a02
+    style G fill:#f8d7da,stroke:#721c24,color:#4a0f16
 ```
 
 Two things about where the gate sits:
