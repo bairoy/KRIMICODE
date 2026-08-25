@@ -40,8 +40,8 @@ They are welded together by that id.
 flowchart LR
     A["assistant<br/>'I am calling run_tests'<br/><b>id: abc</b>"] -->|"must stay together"| T["tool<br/>'3 tests failed…'<br/><b>answers: abc</b>"]
 
-    style A fill:#d4edda,stroke:#155724
-    style T fill:#d4edda,stroke:#155724
+    style A fill:#d4edda,stroke:#155724,color:#0b2e13
+    style T fill:#d4edda,stroke:#155724,color:#0b2e13
 ```
 
 Think of it as a **question and its answer**. The answer alone makes no sense.
@@ -107,8 +107,8 @@ flowchart TD
 
     M4 --> R["❌ 400 Bad Request<br/>and every future request too"]
 
-    style M4 fill:#f8d7da,stroke:#721c24
-    style R fill:#f8d7da,stroke:#721c24
+    style M4 fill:#f8d7da,stroke:#721c24,color:#4a0f16
+    style R fill:#f8d7da,stroke:#721c24,color:#4a0f16
 ```
 
 **The model receives an answer to a question that was never asked.**
@@ -174,10 +174,10 @@ flowchart TD
     C3["☠️ UNSAFE — index 4<br/>orphans the answer to def"] -.-> T4
     C4["☠️ UNSAFE — index 2<br/>orphans the answer to abc"] -.-> T2
 
-    style U0 fill:#d4edda,stroke:#155724
-    style U6 fill:#d4edda,stroke:#155724
-    style T2 fill:#f8d7da,stroke:#721c24
-    style T4 fill:#f8d7da,stroke:#721c24
+    style U0 fill:#d4edda,stroke:#155724,color:#0b2e13
+    style U6 fill:#d4edda,stroke:#155724,color:#0b2e13
+    style T2 fill:#f8d7da,stroke:#721c24,color:#4a0f16
+    style T4 fill:#f8d7da,stroke:#721c24,color:#4a0f16
 ```
 
 Only the green rows are legal cut points. And notice **they are exactly the
@@ -269,8 +269,8 @@ flowchart LR
     CUT --> E["elide = history.slice(0, 22)<br/><i>→ becomes the summary</i>"]
     CUT --> K["keep = history.slice(22)<br/><i>→ stays word for word</i>"]
 
-    style E fill:#fff3cd,stroke:#856404
-    style K fill:#d4edda,stroke:#155724
+    style E fill:#fff3cd,stroke:#856404,color:#4d3a02
+    style K fill:#d4edda,stroke:#155724,color:#0b2e13
 ```
 
 ---

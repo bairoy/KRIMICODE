@@ -96,7 +96,7 @@ flowchart TD
     D --> E["that message is APPENDED<br/>to the same too-big history"]
     E --> A
 
-    style C fill:#f8d7da,stroke:#721c24
+    style C fill:#f8d7da,stroke:#721c24,color:#4a0f16
 ```
 
 **Look at that loop.** Every attempt to fix it makes it worse. This is a trap

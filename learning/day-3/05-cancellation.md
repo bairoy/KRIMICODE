@@ -103,7 +103,7 @@ flowchart TD
     IDX -->|signal| RL["rl.question({ signal })"]
     RL --> STOP3["🛑 the approval prompt closes<br/><i>otherwise it hangs forever</i>"]
 
-    style IDX fill:#f8d7da,stroke:#721c24
+    style IDX fill:#f8d7da,stroke:#721c24,color:#4a0f16
 ```
 
 Miss any layer and cancellation is a half-truth. Skip the exec layer, and
@@ -202,7 +202,7 @@ flowchart TD
     C --> D["a line of input<br/>that will NEVER come"]
     D -.->|"nothing can move"| A
 
-    style D fill:#f8d7da,stroke:#721c24
+    style D fill:#f8d7da,stroke:#721c24,color:#4a0f16
 ```
 
 **The whole program hangs.** Cancellation makes it freeze.
@@ -430,8 +430,8 @@ flowchart TD
 
     BROKEN --> R1["every future request → 400"]
 
-    style MB fill:#f8d7da,stroke:#721c24
-    style MC fill:#f8d7da,stroke:#721c24
+    style MB fill:#f8d7da,stroke:#721c24,color:#4a0f16
+    style MC fill:#f8d7da,stroke:#721c24,color:#4a0f16
 ```
 
 ```mermaid
@@ -447,8 +447,8 @@ flowchart TD
 
     FIXED --> R2["history is well-formed<br/>the next turn works ✅"]
 
-    style TB2 fill:#d4edda,stroke:#155724
-    style TC2 fill:#d4edda,stroke:#155724
+    style TB2 fill:#d4edda,stroke:#155724,color:#0b2e13
+    style TC2 fill:#d4edda,stroke:#155724,color:#0b2e13
 ```
 
 **Two orphaned tool calls.** The assistant announced three; only one came back.
@@ -564,8 +564,8 @@ flowchart TD
     D --> E["ripgrepAvailable = false<br/><b>cached for the whole session</b>"]
     E --> F["every later search silently uses grep<br/>no error · no message · no clue"]
 
-    style E fill:#f8d7da,stroke:#721c24
-    style F fill:#f8d7da,stroke:#721c24
+    style E fill:#f8d7da,stroke:#721c24,color:#4a0f16
+    style F fill:#f8d7da,stroke:#721c24,color:#4a0f16
 ```
 
 The probe is killed → `probe.success` is `false` → `ripgrepAvailable = false`

@@ -165,7 +165,7 @@ flowchart TD
     DIV --> ADD["+ 4 per message<br/><i>the JSON scaffolding</i>"]
     ADD --> OUT(["estimated tokens"])
 
-    style C2 fill:#fff3cd,stroke:#856404
+    style C2 fill:#fff3cd,stroke:#856404,color:#4d3a02
 ```
 
 ---

@@ -29,9 +29,9 @@ flowchart TD
     TOOL --> NORM["normalize.ts<br/>redact secrets · cap size"]
     NORM -->|"the ONLY road back"| AG
 
-    style AG fill:#cfe2ff,stroke:#084298
-    style GATE fill:#f8d7da,stroke:#721c24
-    style NORM fill:#d4edda,stroke:#155724
+    style AG fill:#cfe2ff,stroke:#084298,color:#052c65
+    style GATE fill:#f8d7da,stroke:#721c24,color:#4a0f16
+    style NORM fill:#d4edda,stroke:#155724,color:#0b2e13
 ```
 
 ---
