@@ -72,7 +72,10 @@ export function defaultPolicy(maxTokens: number): CompactionPolicy {
     // The tool specs go out on every request, the reply has to fit alongside
     // them, and the estimate above is approximate. 20% covers all three
     // without leaving a small window unusable.
-    reserveTokens: Math.max(1_000, Math.min(16_000, Math.floor(maxTokens * 0.2))),
+    reserveTokens: Math.max(
+      1_000,
+      Math.min(16_000, Math.floor(maxTokens * 0.2)),
+    ),
     // The current turn plus the one before it. ARCHITECTURE §7: never lose
     // live task state — whatever the user just asked for stays verbatim.
     keepRecentTurns: 2,

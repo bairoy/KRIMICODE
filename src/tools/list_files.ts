@@ -1,3 +1,4 @@
+import type { Dirent } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { z } from 'zod';
@@ -8,7 +9,9 @@ const InputSchema = z.object({
   path: z
     .string()
     .optional()
-    .describe('Directory to list, relative to the workspace root. Defaults to ".".'),
+    .describe(
+      'Directory to list, relative to the workspace root. Defaults to ".".',
+    ),
   recursive: z
     .boolean()
     .optional()
@@ -55,7 +58,7 @@ async function walk(
     const current = queue.shift();
     if (current === undefined) break;
 
-    let listing;
+    let listing: Dirent[];
     try {
       listing = await readdir(current, { withFileTypes: true });
     } catch {

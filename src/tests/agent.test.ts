@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Agent } from '../agent.js';
+import { Agent, MaxTurnsError } from '../agent.js';
 import type { AgentOptions, CompactionInfo } from '../agent.js';
 import { budgetTokens, defaultPolicy, estimateTokens } from '../context.js';
 import type { ModelEvent, ModelProvider, ModelRequest } from '../types.js';
@@ -119,7 +119,9 @@ test('the newest turn survives compaction verbatim', async () => {
   const last = provider.conversationCalls.at(-1);
   assert.ok(last);
   assert.ok(
-    last.messages.some((m) => m.content.includes('MARKER: the actual current question')),
+    last.messages.some((m) =>
+      m.content.includes('MARKER: the actual current question'),
+    ),
     'the current question was summarized away',
   );
 });
@@ -154,7 +156,10 @@ test('a failed summarization falls back to a digest and the session continues', 
   for (let i = 0; i < 12; i++) await agent.send(`${LONG_INPUT} ${i}`);
 
   assert.ok(seen.length > 0, 'compaction never ran');
-  assert.ok(seen.some((info) => info.fallback), 'fallback was never reported');
+  assert.ok(
+    seen.some((info) => info.fallback),
+    'fallback was never reported',
+  );
 
   const after = provider.conversationCalls.at(-1);
   assert.match(after?.messages[0]?.content ?? '', /mechanical digest/i);
@@ -183,7 +188,10 @@ test('compaction reports a real reduction', async () => {
 
   const first = seen[0];
   assert.ok(first);
-  assert.ok(first.tokensAfter < first.tokensBefore, 'compaction did not shrink anything');
+  assert.ok(
+    first.tokensAfter < first.tokensBefore,
+    'compaction did not shrink anything',
+  );
   assert.ok(first.messagesElided > 0);
 });
 
@@ -266,7 +274,7 @@ test('a cancelled turn returns normally instead of throwing', async () => {
 
 test('partial output from a cancelled stream is kept', async () => {
   const controller = new AbortController();
-  const provider = new FakeProvider((request) => {
+  const provider = new FakeProvider(() => {
     if (provider.conversationCalls.length > 1) return text('second answer');
     controller.abort();
     return [
@@ -292,7 +300,12 @@ test('SECURITY: cancelling mid-turn still answers every announced tool call', as
   const provider = new FakeProvider((request) => {
     if (isSummarizer(request)) return text('SUMMARY');
     return provider.conversationCalls.length === 1
-      ? [toolCall('a'), toolCall('b'), toolCall('c'), { type: 'done', stopReason: 'tool_calls' }]
+      ? [
+          toolCall('a'),
+          toolCall('b'),
+          toolCall('c'),
+          { type: 'done', stopReason: 'tool_calls' },
+        ]
       : text('later answer');
   });
 
@@ -322,9 +335,13 @@ test('SECURITY: cancelling mid-turn still answers every announced tool call', as
 
 test('tool calls after the cancellation point are not executed', async () => {
   const controller = new AbortController();
-  const provider = new FakeProvider((request) =>
+  const provider = new FakeProvider(() =>
     provider.conversationCalls.length === 1
-      ? [toolCall('a'), toolCall('b'), { type: 'done', stopReason: 'tool_calls' }]
+      ? [
+          toolCall('a'),
+          toolCall('b'),
+          { type: 'done', stopReason: 'tool_calls' },
+        ]
       : text('later answer'),
   );
 
@@ -360,4 +377,321 @@ test('a turn with no signal behaves exactly as before', async () => {
   await agent.send('hello');
 
   assert.equal(provider.requests[0]?.signal, undefined);
+});
+
+// --- the runaway-loop guard -------------------------------------------------
+
+test('a model that never answers trips the turn limit as a typed error', async () => {
+  // A bare Error here is indistinguishable from a network failure, so the user
+  // is told the agent broke when the real fix is to narrow the request.
+  const provider = new FakeProvider(() => [
+    toolCall('runaway'),
+    { type: 'done', stopReason: 'tool_calls' },
+  ]);
+  const agent = makeAgent(provider);
+
+  await assert.rejects(
+    () => agent.send('loop forever'),
+    (err: unknown) => err instanceof MaxTurnsError && err.turns > 0,
+  );
+});
+
+test('history is still well-formed after the turn limit trips', async () => {
+  // The whole point of throwing at the top of the loop: every announced tool
+  // call already has its result, so the conversation survives and the user can
+  // keep going. Leaving one unanswered would make every later request a 400.
+  const provider = new FakeProvider(() => [
+    toolCall('runaway'),
+    { type: 'done', stopReason: 'tool_calls' },
+  ]);
+  const agent = makeAgent(provider);
+
+  await assert.rejects(() => agent.send('loop forever'));
+
+  const sent = provider.conversationCalls.at(-1)?.messages ?? [];
+  // Without this the loop below could pass by iterating over nothing.
+  assert.ok(sent.length > 3, 'expected a real conversation to inspect');
+
+  const announced = new Set<string>();
+  let toolResults = 0;
+  for (const message of sent) {
+    if (message.role === 'assistant') {
+      for (const c of message.toolCalls ?? []) announced.add(c.id);
+    } else if (message.role === 'tool') {
+      toolResults++;
+      assert.ok(
+        announced.has(message.toolCallId),
+        `orphaned tool result ${message.toolCallId}`,
+      );
+    }
+  }
+  assert.ok(toolResults > 0, 'expected tool results to have been checked');
+});
+
+// --- saving and resuming ----------------------------------------------------
+
+test('a snapshot carries the history the model was sent', async () => {
+  const provider = new FakeProvider(() => text('answer'));
+  const agent = makeAgent(provider);
+
+  await agent.send('hello');
+  const state = agent.snapshot();
+
+  assert.deepEqual(state.history, [
+    { role: 'user', content: 'hello' },
+    { role: 'assistant', content: 'answer' },
+  ]);
+  assert.equal(state.summary, null);
+});
+
+test('a snapshot is a copy, not a live view of history', async () => {
+  // A caller that saves a snapshot and then keeps talking must not find the
+  // saved object mutating underneath it.
+  const provider = new FakeProvider(() => text('answer'));
+  const agent = makeAgent(provider);
+
+  await agent.send('first');
+  const state = agent.snapshot();
+  await agent.send('second');
+
+  assert.equal(state.history.length, 2, 'the snapshot grew after being taken');
+});
+
+test('restored history is sent to the model on the next turn', async () => {
+  // The whole point of resuming: the model has to actually see what was said
+  // before, not just have it sitting in a field.
+  const provider = new FakeProvider(() => text('answer'));
+  const agent = makeAgent(provider, {
+    initialState: {
+      history: [
+        { role: 'user', content: 'we discussed the parser' },
+        { role: 'assistant', content: 'yes, in src/parse.ts' },
+      ],
+      summary: 'earlier: explored the codebase',
+    },
+  });
+
+  await agent.send('what was the file again?');
+
+  const sent = provider.conversationCalls[0]?.messages ?? [];
+  assert.match(
+    sent.map((m) => m.content).join('\n'),
+    /we discussed the parser/,
+    'restored history never reached the model',
+  );
+  // The summary lives in the system message, which is rebuilt per request.
+  assert.match(sent[0]?.content ?? '', /earlier: explored the codebase/);
+});
+
+test('a restored conversation can be snapshotted again', async () => {
+  // Resume, talk, save: the second save must contain both halves, or a session
+  // silently loses everything from before the last resume.
+  const provider = new FakeProvider(() => text('answer'));
+  const agent = makeAgent(provider, {
+    initialState: {
+      history: [{ role: 'user', content: 'original question' }],
+      summary: null,
+    },
+  });
+
+  await agent.send('follow-up');
+  const state = agent.snapshot();
+
+  assert.equal(
+    state.history.length,
+    3,
+    'expected original + follow-up + reply',
+  );
+  assert.equal(state.history[0]?.content, 'original question');
+});
+
+test('reset clears the summary along with the history', async () => {
+  // Leaving the summary behind would silently reintroduce a description of
+  // turns that no longer exist into the next request.
+  const provider = new FakeProvider(() => text('answer'));
+  const agent = makeAgent(provider, {
+    initialState: {
+      // Distinctive markers: a short word like "old" also occurs inside the
+      // system prompt (in "old_str"), which made this assertion fire on
+      // unrelated text.
+      history: [{ role: 'user', content: 'MARKER_PRIOR_HISTORY' }],
+      summary: 'MARKER_PRIOR_SUMMARY',
+    },
+  });
+
+  agent.reset();
+  await agent.send('brand new question');
+
+  const sent = provider.conversationCalls[0]?.messages ?? [];
+  const whole = sent.map((m) => m.content).join('\n');
+  assert.equal(whole.includes('MARKER_PRIOR_SUMMARY'), false);
+  assert.equal(whole.includes('MARKER_PRIOR_HISTORY'), false);
+});
+
+test('the model can be switched mid-session', async () => {
+  const provider = new FakeProvider(() => text('answer'));
+  const agent = makeAgent(provider);
+
+  await agent.send('first');
+  agent.model = 'another-model';
+  await agent.send('second');
+
+  assert.equal(provider.conversationCalls[0]?.model, 'test-model');
+  assert.equal(provider.conversationCalls[1]?.model, 'another-model');
+});
+
+// --- the repeated-failure breaker -------------------------------------------
+
+test('an identical failing call is not run forever', async () => {
+  // Found by manual testing: the model asked to edit a line whose secret had
+  // been redacted, so old_str could never match. It reissued the byte-identical
+  // call 22 times, once per turn, until it ran out of turns and credits.
+  const provider = new FakeProvider(() => [
+    toolCall('same'),
+    { type: 'done', stopReason: 'tool_calls' },
+  ]);
+  const agent = makeAgent(provider);
+
+  await assert.rejects(() => agent.send('do the impossible thing'));
+
+  // Every turn still announced a call and still got a result — the loop is
+  // intact — but the tool itself stopped being invoked.
+  const results =
+    provider.conversationCalls
+      .at(-1)
+      ?.messages.filter((m) => m.role === 'tool')
+      .map((m) => m.content) ?? [];
+
+  assert.ok(results.length > 3, 'expected several attempts to inspect');
+  assert.ok(
+    results.some((r) => r.includes('already failed')),
+    'the breaker never fired',
+  );
+});
+
+test('the breaker allows one retry before giving up', async () => {
+  // Transient failures are real — a timeout, a file being written just then —
+  // so the second attempt still runs. Only the third is refused.
+  const provider = new FakeProvider(() => [
+    toolCall('same'),
+    { type: 'done', stopReason: 'tool_calls' },
+  ]);
+  const agent = makeAgent(provider);
+
+  await assert.rejects(() => agent.send('try repeatedly'));
+
+  const results =
+    provider.conversationCalls
+      .at(-1)
+      ?.messages.filter((m) => m.role === 'tool')
+      .map((m) => m.content) ?? [];
+
+  const blocked = results.filter((r) => r.includes('already failed')).length;
+  assert.equal(results.length - blocked, 2, 'expected exactly two real runs');
+});
+
+test('a call that differs is not blocked by an earlier failure', async () => {
+  // The key is name plus arguments. Blocking on name alone would stop the
+  // model correcting a typo in a path.
+  let seen = 0;
+  const provider = new FakeProvider(() => {
+    seen++;
+    if (seen > 4) return text('done');
+    return [
+      {
+        type: 'tool_call',
+        id: `c${seen}`,
+        name: 'no_such_tool',
+        argsJson: `{"attempt":${seen}}`,
+      },
+      { type: 'done', stopReason: 'tool_calls' },
+    ];
+  });
+  const agent = makeAgent(provider);
+
+  await agent.send('try different things');
+
+  const results =
+    provider.conversationCalls
+      .at(-1)
+      ?.messages.filter((m) => m.role === 'tool')
+      .map((m) => m.content) ?? [];
+
+  assert.equal(
+    results.some((r) => r.includes('already failed')),
+    false,
+    'distinct calls were wrongly treated as repeats',
+  );
+});
+
+test('a successful call is never counted as a failure', async () => {
+  // Asking git_status five times as the tree changes is legitimate.
+  let seen = 0;
+  const provider = new FakeProvider(() => {
+    seen++;
+    if (seen > 5) return text('done');
+    return [
+      {
+        type: 'tool_call',
+        id: `c${seen}`,
+        name: 'list_files',
+        argsJson: '{"path":"."}',
+      },
+      { type: 'done', stopReason: 'tool_calls' },
+    ];
+  });
+  const agent = makeAgent(provider);
+
+  await agent.send('keep looking');
+
+  const results =
+    provider.conversationCalls
+      .at(-1)
+      ?.messages.filter((m) => m.role === 'tool')
+      .map((m) => m.content) ?? [];
+
+  assert.equal(
+    results.some((r) => r.includes('already failed')),
+    false,
+    'a repeated successful call was blocked',
+  );
+});
+
+test('clearing the conversation forgets past failures', async () => {
+  const provider = new FakeProvider(() => [
+    toolCall('same'),
+    { type: 'done', stopReason: 'tool_calls' },
+  ]);
+  const agent = makeAgent(provider);
+  await assert.rejects(() => agent.send('fail repeatedly'));
+
+  agent.reset();
+  await assert.rejects(() => agent.send('fail repeatedly again'));
+
+  // After a reset the tool runs again rather than being refused immediately.
+  const results =
+    provider.conversationCalls
+      .at(-1)
+      ?.messages.filter((m) => m.role === 'tool')
+      .map((m) => m.content) ?? [];
+  assert.ok(
+    results.some((r) => r.includes('Unknown tool')),
+    'the tool was never retried after the reset',
+  );
+});
+
+test('the system prompt tells the model that code in a reply is not the work', async () => {
+  // A weaker model answered "write a program in b.ts" by printing the program
+  // in its reply and stopping. The file was untouched and the user had a
+  // confident-looking answer saying otherwise.
+  const provider = new FakeProvider(() => text('answer'));
+  const agent = makeAgent(provider);
+
+  await agent.send('hello');
+
+  const system = provider.conversationCalls[0]?.messages[0];
+  assert.equal(system?.role, 'system');
+  assert.match(system.content, /not the work/i);
+  // And the one workflow the tool set does not make obvious.
+  assert.match(system.content, /read_file it first, then edit_file/i);
 });

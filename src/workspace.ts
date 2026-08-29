@@ -1,5 +1,6 @@
 import { realpath } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, resolve } from 'node:path';
+import { isInside } from './platform.js';
 
 /** Thrown when a path would take us outside the workspace. */
 export class WorkspaceError extends Error {
@@ -15,7 +16,12 @@ export class WorkspaceError extends Error {
  * refusing (and, once the gate exists, for asking).
  */
 const SENSITIVE: readonly RegExp[] = [
+  // `.env`, `.env.local`, `.env.production` — the dotfile and its variants.
   /^\.env(\..*)?$/i,
+  // Anything *ending* in .env: `production.env`, `secrets.env`, `creds.env`.
+  // Common in real projects and not covered by the anchored pattern above,
+  // which requires the name to start with ".env".
+  /\.env$/i,
   /^\.npmrc$/i,
   /^\.netrc$/i,
   /^\.git-credentials$/i,
@@ -63,7 +69,10 @@ export async function resolveInWorkspace(
   const realRoot = await realpath(root);
   const real = await realpathNearest(candidate);
 
-  if (real !== realRoot && !real.startsWith(realRoot + sep)) {
+  // Case-folded on Windows, where "C:\Work" and "c:\work" are the same
+  // directory. A case-sensitive comparison here is a boundary bug, not a
+  // cosmetic one: it can read an in-workspace path as being outside.
+  if (!isInside(real, realRoot, process.platform)) {
     throw new WorkspaceError(
       `Refused: "${input}" resolves outside the workspace.`,
     );

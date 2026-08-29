@@ -7,11 +7,15 @@ const InputSchema = z.object({
   staged: z
     .boolean()
     .optional()
-    .describe('Show staged changes instead of unstaged ones. Defaults to false.'),
+    .describe(
+      'Show staged changes instead of unstaged ones. Defaults to false.',
+    ),
   path: z
     .string()
     .optional()
-    .describe('Limit the diff to this file or directory, relative to the workspace root.'),
+    .describe(
+      'Limit the diff to this file or directory, relative to the workspace root.',
+    ),
 });
 
 const NOT_A_REPO = 128;

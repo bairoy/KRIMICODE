@@ -1,4 +1,11 @@
 import { spawn } from 'node:child_process';
+import {
+  type Invocation,
+  isWindows,
+  shellInvocation,
+  shimInvocation,
+  taskkillArgs,
+} from './platform.js';
 
 /** ARCHITECTURE §3. */
 export interface CommandResult {
@@ -79,14 +86,33 @@ function createCollector(limit: number) {
 }
 
 /**
- * Signal an entire process group.
+ * Signal an entire process tree.
  *
  * CLAUDE.md: killing the shell alone leaves its children running. `sh -c "sleep
- * 300 & sleep 300"` spawns grandchildren that outlive the shell, so we signal
- * the negative pid — which POSIX reads as "the group led by this pid".
+ * 300 & sleep 300"` spawns grandchildren that outlive the shell, so on POSIX we
+ * signal the negative pid — which is read as "the group led by this pid".
  * `detached: true` at spawn time is what makes the child a group leader.
+ *
+ * Windows has no process groups in that sense, so `taskkill /T` walks the tree
+ * instead. `taskkill` is the one process spawned outside `spawnAndCollect`, and
+ * it stays inside this module because `exec.ts` is the spawn chokepoint.
  */
-function killGroup(pid: number, signal: NodeJS.Signals): void {
+function killTree(pid: number, signal: NodeJS.Signals): void {
+  if (isWindows(process.platform)) {
+    try {
+      // Detached and fully ignored: this is fire-and-forget cleanup, and a
+      // failure here means the target is already gone.
+      const killer = spawn('taskkill', taskkillArgs(pid), {
+        stdio: 'ignore',
+        detached: false,
+      });
+      killer.on('error', () => {});
+    } catch {
+      // taskkill missing or the process is already gone.
+    }
+    return;
+  }
+
   try {
     process.kill(-pid, signal);
   } catch {
@@ -101,8 +127,7 @@ function killGroup(pid: number, signal: NodeJS.Signals): void {
  * CommandResult with `success: false` so the model can read and react to it.
  */
 function spawnAndCollect(
-  file: string,
-  args: readonly string[],
+  invocation: Invocation,
   options: RunCommandOptions,
 ): Promise<CommandResult> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -124,9 +149,14 @@ function spawnAndCollect(
   }
 
   return new Promise<CommandResult>((resolve) => {
-    const child = spawn(file, [...args], {
+    const child = spawn(invocation.file, [...invocation.args], {
       cwd: options.cwd,
-      detached: true, // new process group, so we can kill the whole tree
+      // POSIX only: makes the child a process-group leader so the whole tree
+      // can be signalled. On Windows `detached` means "own console window"
+      // instead, which is not what we want and can flash a window on screen —
+      // there, `taskkill /T` walks the tree without any spawn-time setup.
+      detached: !isWindows(process.platform),
+      windowsVerbatimArguments: invocation.windowsVerbatimArguments,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: childEnv(),
     });
@@ -142,10 +172,16 @@ function spawnAndCollect(
       const pid = child.pid;
       if (pid === undefined) return;
 
-      killGroup(pid, 'SIGTERM');
+      killTree(pid, 'SIGTERM');
       // Escalate for anything that ignores SIGTERM. unref() so this timer
       // alone cannot keep the process alive.
-      setTimeout(() => killGroup(pid, 'SIGKILL'), GRACE_MS).unref();
+      //
+      // POSIX only. `taskkill /F` is already unconditional, and Windows has no
+      // graceful signal that console applications reliably honour, so there is
+      // nothing to escalate from — the first kill is the forced one.
+      if (!isWindows(process.platform)) {
+        setTimeout(() => killTree(pid, 'SIGKILL'), GRACE_MS).unref();
+      }
     };
 
     const onAbort = (): void => {
@@ -197,8 +233,9 @@ function spawnAndCollect(
 }
 
 /**
- * Runs a shell command. The string is interpreted by `/bin/sh -c`, so it
- * supports pipes, redirection, and globbing.
+ * Runs a shell command, so it supports pipes, redirection, and globbing.
+ * Interpreted by `/bin/sh -c`, or by `cmd.exe /d /s /c` on Windows — which
+ * means the *syntax* a command may use differs by platform.
  *
  * Only for commands the user has approved as a whole. Never build one of these
  * by interpolating model-supplied text — use `runProgram` instead.
@@ -207,7 +244,7 @@ export function runCommand(
   command: string,
   options: RunCommandOptions,
 ): Promise<CommandResult> {
-  return spawnAndCollect('/bin/sh', ['-c', command], options);
+  return spawnAndCollect(shellInvocation(command, process.platform), options);
 }
 
 /**
@@ -223,5 +260,24 @@ export function runProgram(
   args: readonly string[],
   options: RunCommandOptions,
 ): Promise<CommandResult> {
-  return spawnAndCollect(file, args, options);
+  return spawnAndCollect(
+    { file, args, windowsVerbatimArguments: false },
+    options,
+  );
+}
+
+/**
+ * Runs a program that is a batch-file shim on Windows — `npm` and friends.
+ *
+ * Separate from `runProgram` because on Windows it has to go through `cmd.exe`,
+ * which reintroduces a shell. `shimInvocation` refuses any argv that could be
+ * interpreted as shell syntax, so this cannot be used to smuggle model input
+ * into a command line: pass model-supplied arguments to `runProgram` instead.
+ */
+export function runShim(
+  file: string,
+  args: readonly string[],
+  options: RunCommandOptions,
+): Promise<CommandResult> {
+  return spawnAndCollect(shimInvocation(file, args, process.platform), options);
 }

@@ -22,8 +22,16 @@ before(async () => {
     'const needle = 1;\nconst other = 2;\n',
     'utf8',
   );
-  await writeFile(join(root, 'src', 'deep', 'b.ts'), 'const needle = 3;\n', 'utf8');
-  await writeFile(join(root, 'node_modules', 'junk', 'c.ts'), 'const needle = 4;\n', 'utf8');
+  await writeFile(
+    join(root, 'src', 'deep', 'b.ts'),
+    'const needle = 3;\n',
+    'utf8',
+  );
+  await writeFile(
+    join(root, 'node_modules', 'junk', 'c.ts'),
+    'const needle = 4;\n',
+    'utf8',
+  );
   await writeFile(join(root, '.git', 'config'), 'needle in git\n', 'utf8');
 });
 
@@ -102,7 +110,11 @@ test('search_code skips generated directories', async () => {
 
 test('search_code reports no matches as success, not failure', async () => {
   const result = await search({ pattern: 'definitely-not-present-anywhere' });
-  assert.equal(result.success, true, 'exit code 1 from grep means "none found"');
+  assert.equal(
+    result.success,
+    true,
+    'exit code 1 from grep means "none found"',
+  );
   assert.ok(result.success && result.content.includes('No matches'));
 });
 
@@ -123,7 +135,10 @@ test('search_code treats the pattern as a regex by default', async () => {
 });
 
 test('search_code literal mode disables regex metacharacters', async () => {
-  const result = await search({ pattern: 'const (needle|other)', literal: true });
+  const result = await search({
+    pattern: 'const (needle|other)',
+    literal: true,
+  });
   assert.ok(result.success);
   assert.ok(result.success && result.content.includes('No matches'));
 });
@@ -132,7 +147,10 @@ test('search_code is case sensitive unless told otherwise', async () => {
   const sensitive = await search({ pattern: 'NEEDLE' });
   assert.ok(sensitive.success && sensitive.content.includes('No matches'));
 
-  const insensitive = await search({ pattern: 'NEEDLE', case_insensitive: true });
+  const insensitive = await search({
+    pattern: 'NEEDLE',
+    case_insensitive: true,
+  });
   assert.ok(insensitive.success && insensitive.content.includes('a.ts'));
 });
 

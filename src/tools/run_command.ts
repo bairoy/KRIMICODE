@@ -59,7 +59,9 @@ export const runCommandTool = defineTool({
   async execute(input, context) {
     const result = await runCommand(input.command, {
       cwd: context.workspaceRoot,
-      ...(input.timeout_ms !== undefined ? { timeoutMs: input.timeout_ms } : {}),
+      ...(input.timeout_ms !== undefined
+        ? { timeoutMs: input.timeout_ms }
+        : {}),
       signal: context.signal,
     });
 

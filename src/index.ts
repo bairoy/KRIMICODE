@@ -1,9 +1,24 @@
+#!/usr/bin/env node
 import * as readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
+import { parseCliArgs, USAGE } from './args.js';
 import { loadConfig, loadEnvFile } from './config.js';
 import { OpenAICompatibleProvider } from './provider.js';
-import { Agent } from './agent.js';
+import { Agent, MaxTurnsError } from './agent.js';
 import type { CompactionInfo } from './agent.js';
+import { handleCommand } from './commands.js';
+import type { CommandContext } from './commands.js';
+import {
+  deriveTitle,
+  formatSessionLine,
+  latestSession,
+  listSessions,
+  loadSession,
+  newSessionId,
+  saveSession,
+} from './session.js';
+import type { SavedSession } from './session.js';
+import { toolSpecs } from './tools/index.js';
 import { registerSecret } from './redact.js';
 import {
   createPasteFilter,
@@ -15,6 +30,7 @@ import type { AskUser, OperationClass, UserAnswer } from './permissions.js';
 import type { ToolResult } from './types.js';
 import {
   BOLD_RED,
+  CLEAR_SCREEN,
   DIM,
   RESET,
   renderDiff,
@@ -30,7 +46,6 @@ const OPERATION_LABEL: Record<OperationClass, string> = {
   DESTRUCTIVE: 'DESTRUCTIVE',
   GIT_STATE_CHANGE: 'change git state',
 };
-
 
 /**
  * Owns every byte written to stdout during a turn: the waiting spinner, dimmed
@@ -120,12 +135,52 @@ function createRenderer() {
 }
 
 async function main(): Promise<void> {
+  const cli = parseCliArgs(process.argv.slice(2));
+
+  // Before loadConfig, so `--help` still works for someone who has not set up
+  // an API key yet — which is exactly who most needs to read it.
+  if (cli.help) {
+    console.log(USAGE);
+    return;
+  }
+
   loadEnvFile();
   const config = loadConfig();
 
   // Scrub the exact key from anything a tool returns, on top of the
   // pattern heuristics in redact.ts.
   registerSecret(config.apiKey);
+
+  // --list is a query, not a session: print and leave without touching the
+  // terminal mode or opening a connection to the model.
+  if (cli.list) {
+    const sessions = await listSessions(config.workspaceRoot);
+    if (sessions.length === 0) {
+      console.log('No saved sessions for this directory.');
+    } else {
+      for (const session of sessions) {
+        console.log(formatSessionLine(session));
+      }
+    }
+    return;
+  }
+
+  // Resolve any resume before the agent is built, so its restored history can
+  // be handed to the constructor rather than pushed in afterwards.
+  let resumed: SavedSession | null = null;
+  if (cli.resume !== undefined) {
+    resumed = await loadSession(cli.resume, undefined);
+    if (!resumed) {
+      throw new Error(
+        `No session "${cli.resume}". Run with --list to see what there is.`,
+      );
+    }
+  } else if (cli.continue) {
+    resumed = await latestSession(config.workspaceRoot);
+    if (!resumed) {
+      console.log('No session to continue in this directory; starting fresh.');
+    }
+  }
 
   const render = createRenderer();
 
@@ -153,15 +208,34 @@ async function main(): Promise<void> {
    */
   let active: AbortController | null = null;
 
+  /**
+   * Aborts the `> ` prompt when it is time to leave.
+   *
+   * `rl.close()` does **not** settle a pending `rl.question()` — the promise
+   * simply never resolves or rejects. Closing the interface to quit therefore
+   * hung the loop before the `finally` below could run, which left the terminal
+   * in raw mode with bracketed paste still enabled: the user's shell was broken
+   * after we exited. Aborting the question makes it reject, so the loop leaves
+   * through its normal path and the cleanup actually happens.
+   */
+  let idle: AbortController | null = null;
+
+  const stopWaitingForInput = (): void => idle?.abort();
+
   // Raw mode means SIGINT arrives here as a readline event rather than as a
   // process signal, so this is the only handler.
   rl.on('SIGINT', () => {
     if (active === null) {
-      rl.close();
+      // Nothing to interrupt, so this means quit.
+      stopWaitingForInput();
       return;
     }
     active.abort();
   });
+
+  // Ctrl-D and an exhausted pipe both close the interface rather than sending
+  // a line, and would strand the pending question for the same reason.
+  rl.on('close', stopWaitingForInput);
 
   /**
    * The approval prompt. Anything other than an explicit yes is a refusal —
@@ -181,7 +255,9 @@ async function main(): Promise<void> {
 
     if (request.diff) {
       stdout.write('\n');
-      stdout.write(`${renderDiff(request.diff.before, request.diff.after, '    ')}\n`);
+      stdout.write(
+        `${renderDiff(request.diff.before, request.diff.after, '    ')}\n`,
+      );
     }
 
     // "always" is never offered for a destructive op — the gate refuses to
@@ -207,7 +283,8 @@ async function main(): Promise<void> {
       return 'no'; // stdin closed mid-prompt, or the turn was cancelled
     }
 
-    if (!destructive && (answer === 'a' || answer === 'always')) return 'always';
+    if (!destructive && (answer === 'a' || answer === 'always'))
+      return 'always';
     if (answer === 'y' || answer === 'yes') return 'once';
     return 'no';
   };
@@ -216,7 +293,17 @@ async function main(): Promise<void> {
 
   const agent = new Agent({
     provider: new OpenAICompatibleProvider(config),
-    model: config.model,
+    // A resumed session keeps the model it was held with, so continuing a
+    // conversation does not silently change who is answering.
+    model: resumed?.model ?? config.model,
+    ...(resumed
+      ? {
+          initialState: {
+            history: resumed.history,
+            summary: resumed.summary,
+          },
+        }
+      : {}),
     workspaceRoot: config.workspaceRoot,
     gate,
     onText: (text) => render.text(text),
@@ -233,34 +320,139 @@ async function main(): Promise<void> {
     },
   });
 
-  // baseURL and model are not secrets. apiKey is never printed.
-  console.log(
-    `krimicode — ${config.model} @ ${config.baseURL} ` +
-      `${DIM}(context ${config.maxContextTokens} tokens)${RESET}`,
+  /**
+   * The session being written to. A resumed one keeps its id so continuing
+   * updates the same file rather than accumulating near-duplicates; `/clear`
+   * starts a new one, so the cleared conversation stays on disk.
+   */
+  let sessionId = resumed?.id ?? newSessionId();
+  let createdAt = resumed?.createdAt ?? new Date().toISOString();
+
+  /**
+   * Persist the conversation as it stands. Called after a turn settles, never
+   * during one: a snapshot taken mid-turn can hold a tool call whose result has
+   * not been recorded yet, which is exactly the malformed history that makes
+   * every later request fail.
+   */
+  const persist = async (): Promise<void> => {
+    const state = agent.snapshot();
+    if (state.history.length === 0) return; // nothing worth a file yet
+
+    try {
+      await saveSession({
+        version: 1,
+        id: sessionId,
+        workspaceRoot: config.workspaceRoot,
+        model: agent.model,
+        createdAt,
+        updatedAt: new Date().toISOString(),
+        title: deriveTitle(state.history),
+        summary: state.summary,
+        history: [...state.history],
+      });
+    } catch (err) {
+      // Failing to save is worth knowing about but must not end the session —
+      // the conversation in memory is still perfectly usable.
+      const message = err instanceof Error ? err.message : String(err);
+      stdout.write(`${DIM}could not save session: ${message}${RESET}\n`);
+    }
+  };
+
+  /**
+   * baseURL and model are not secrets; the apiKey is never printed.
+   *
+   * Reprinted after `/clear` wipes the screen, so a blank terminal still says
+   * which model you are talking to and where it lives.
+   */
+  const printBanner = (note?: string): void => {
+    console.log(
+      `krimicode — ${agent.model} @ ${config.baseURL} ` +
+        `${DIM}(context ${config.maxContextTokens} tokens)${RESET}`,
+    );
+    if (note !== undefined) console.log(note);
+    console.log(`${DIM}/help for commands. Ctrl-C to stop or quit.${RESET}\n`);
+  };
+
+  const commandContext: CommandContext = {
+    write: (text) => stdout.write(text),
+    getModel: () => agent.model,
+    setModel: (name) => {
+      agent.model = name;
+    },
+    clear: () => {
+      agent.reset();
+      // A fresh id, so the cleared conversation is not overwritten by what
+      // comes next.
+      sessionId = newSessionId();
+      createdAt = new Date().toISOString();
+
+      // Wipe the screen too. Forgetting the conversation while leaving it all
+      // visible reads as though the command did nothing — and the scrollback
+      // would still hold what the agent has been told to forget.
+      // Only on a terminal: these codes would be literal junk in a pipe or a
+      // redirected log.
+      if (stdout.isTTY) {
+        stdout.write(CLEAR_SCREEN);
+        printBanner();
+      }
+    },
+    listTools: () =>
+      toolSpecs().map((spec) => ({
+        name: spec.name,
+        description: spec.description,
+      })),
+    listSessions: async () =>
+      (await listSessions(config.workspaceRoot)).map((session) =>
+        formatSessionLine(session),
+      ),
+  };
+
+  printBanner(
+    resumed
+      ? `${DIM}resumed ${resumed.id} — ${resumed.history.length} messages: ${resumed.title}${RESET}`
+      : undefined,
   );
-  console.log('/exit or Ctrl-C to quit.\n');
 
   try {
-    for (; ;) {
+    for (;;) {
       let line: string;
+      idle = new AbortController();
       try {
-        line = (await rl.question('> ')).trim();
+        line = (await rl.question('> ', { signal: idle.signal })).trim();
       } catch {
-        break; // stdin closed: Ctrl-D, or piped input exhausted.
+        // Ctrl-C at the prompt, Ctrl-D, or piped input exhausted. All three
+        // mean the same thing here: stop asking for input and shut down
+        // cleanly through the finally below.
+        break;
       }
       if (!line) continue;
-      if (line === '/exit') break;
+
+      const outcome = await handleCommand(line, commandContext);
+      if (outcome === 'exit') break;
+      if (outcome === 'handled') continue;
 
       render.waiting();
       active = new AbortController();
       try {
         await agent.send(line, active.signal);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        const hint = /ECONNREFUSED|fetch failed|ENOTFOUND/i.test(msg)
-          ? ` (could not reach ${config.baseURL})`
-          : '';
-        console.error(`\nerror: ${msg}${hint}\n`);
+        // The turn limit is not a malfunction — the conversation is intact and
+        // can be continued. Say what happened and what to do about it, rather
+        // than rendering it as an unexplained failure.
+        if (err instanceof MaxTurnsError) {
+          console.error(
+            `\n${YELLOW}⚠ ${err.message}${RESET}\n` +
+              `${DIM}  The model made ${err.turns} rounds of tool calls without` +
+              ' answering. The conversation is still intact — try narrowing the\n' +
+              `  request, or ask it to summarize what it found so far.${RESET}\n`,
+          );
+        } else {
+          const msg = err instanceof Error ? err.message : String(err);
+          const hint = /ECONNREFUSED|fetch failed|ENOTFOUND/i.test(msg)
+            ? ` (could not reach ${config.baseURL})`
+            : '';
+          console.error(`\nerror: ${msg}${hint}\n`);
+        }
       } finally {
         const cancelled = active.signal.aborted;
         // Cleared before rendering, so a Ctrl-C landing in this window is read
@@ -268,6 +460,12 @@ async function main(): Promise<void> {
         active = null;
         render.end();
         if (cancelled) stdout.write(`${DIM}cancelled${RESET}\n\n`);
+
+        // After the turn has settled, including after an error or a
+        // cancellation: history is well-formed at this point in all three
+        // cases, and losing the work because the turn ended badly would be
+        // worse than saving it.
+        await persist();
       }
     }
   } finally {
