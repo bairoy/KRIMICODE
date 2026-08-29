@@ -42,6 +42,22 @@ export interface Tool<TInput> {
    * is trustworthy and the prompt can describe exactly what will happen.
    */
   classify(input: TInput): CallClassification;
+  /**
+   * Optional. Reject a call that cannot possibly succeed, *before* the user is
+   * asked to approve it.
+   *
+   * `classify` is synchronous and sees only the arguments, so it can describe
+   * what the model intends but not whether it is achievable. Without this hook
+   * the gate prompts for edits to files that do not exist, and renders a diff
+   * built from an `old_str` that appears nowhere in the file — the user
+   * approves a change that then fails. Being asked to approve impossible work
+   * is how people learn to press `y` without reading, which is precisely what
+   * the gate exists to prevent.
+   *
+   * Return null to proceed to the gate, or a failed ToolResult to stop here.
+   * Must not mutate anything: it runs before approval, so it may only look.
+   */
+  precheck?(input: TInput, context: ToolContext): Promise<ToolResult | null>;
   execute(input: TInput, context: ToolContext): Promise<ToolResult>;
 }
 
@@ -111,6 +127,25 @@ export function defineTool<TInput>(tool: Tool<TInput>): RegisteredTool {
           error: 'Cancelled by the user before the call ran.',
           retryable: false,
         };
+      }
+
+      // Before the gate: never ask the user to approve something that is
+      // already known to be impossible. A failure here has not touched
+      // anything, so no approval was needed to reach it.
+      if (tool.precheck) {
+        try {
+          const problem = await tool.precheck(parsed.data, context);
+          if (problem) return problem;
+        } catch (err) {
+          // A broken precheck must not block the tool outright, but it also
+          // must not silently wave the call through to the gate as if it had
+          // passed — report it like any other tool failure.
+          return {
+            success: false,
+            error: err instanceof Error ? err.message : String(err),
+            retryable: false,
+          };
+        }
       }
 
       // ARCHITECTURE §4: parse -> validate -> PERMISSION GATE -> handler.

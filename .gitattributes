@@ -1,0 +1,15 @@
+# Normalise line endings.
+#
+# Without this, Git checks the repository out with CRLF on Windows. Biome
+# formats with LF, so every line of every file reads as changed and the format
+# check fails on the Windows CI job while passing everywhere else.
+#
+# `eol=lf` forces LF in the working tree on all platforms, which is also what
+# the shell scripts and the shebang in dist/index.js need in order to run.
+* text=auto eol=lf
+
+# Binary-ish files Git should never touch.
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary

@@ -1,5 +1,6 @@
 import type { ToolSpec } from '../types.js';
 import type { RegisteredTool } from './define.js';
+import { createFileTool } from './create_file.js';
 import { editFileTool } from './edit_file.js';
 import { gitDiffTool } from './git_diff.js';
 import { gitStatusTool } from './git_status.js';
@@ -18,6 +19,7 @@ const TOOLS: readonly RegisteredTool[] = [
   searchCodeTool,
   readFileTool,
   editFileTool,
+  createFileTool,
   gitStatusTool,
   gitDiffTool,
   runTestsTool,

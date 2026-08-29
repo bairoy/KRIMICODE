@@ -24,7 +24,10 @@ export interface ToolCallDelta {
   readonly index: number;
   readonly id?: string | undefined;
   readonly function?:
-    | { readonly name?: string | undefined; readonly arguments?: string | undefined }
+    | {
+        readonly name?: string | undefined;
+        readonly arguments?: string | undefined;
+      }
     | undefined;
 }
 
@@ -171,6 +174,10 @@ export class OpenAICompatibleProvider implements ModelProvider {
 export function toWireMessages(
   messages: readonly Message[],
 ): ChatCompletionMessageParam[] {
+  // The switch below is exhaustive over Message's four roles, and the callback
+  // has an explicit return type, so tsc already proves every path returns.
+  // Biome does not do exhaustiveness analysis on discriminated unions.
+  // biome-ignore lint/suspicious/useIterableCallbackReturn: exhaustive switch, proven by tsc
   return messages.map((m): ChatCompletionMessageParam => {
     switch (m.role) {
       case 'system':
@@ -180,14 +187,14 @@ export function toWireMessages(
       case 'assistant':
         return m.toolCalls?.length
           ? {
-            role: 'assistant',
-            content: m.content || null,
-            tool_calls: m.toolCalls.map((tc) => ({
-              id: tc.id,
-              type: 'function' as const,
-              function: { name: tc.name, arguments: tc.argsJson },
-            })),
-          }
+              role: 'assistant',
+              content: m.content || null,
+              tool_calls: m.toolCalls.map((tc) => ({
+                id: tc.id,
+                type: 'function' as const,
+                function: { name: tc.name, arguments: tc.argsJson },
+              })),
+            }
           : { role: 'assistant', content: m.content };
       case 'tool':
         return { role: 'tool', tool_call_id: m.toolCallId, content: m.content };
@@ -226,9 +233,7 @@ export function extractReasoning(delta: unknown): string {
   return '';
 }
 
-function toWireTools(
-  tools: readonly ToolSpec[],
-): ChatCompletionFunctionTool[] {
+function toWireTools(tools: readonly ToolSpec[]): ChatCompletionFunctionTool[] {
   return tools.map((t) => ({
     type: 'function',
     function: {

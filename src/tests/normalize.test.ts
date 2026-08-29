@@ -25,7 +25,9 @@ test('the tail is kept because errors and conclusions live at the end', () => {
 
 test('the elided count is accurate', () => {
   const text = 'x'.repeat(50_000);
-  const match = /\[\.\.\. (\d+) characters elided \.\.\.\]/.exec(capOutput(text));
+  const match = /\[\.\.\. (\d+) characters elided \.\.\.\]/.exec(
+    capOutput(text),
+  );
   assert.ok(match);
   // 50000 total - 20000 head - 10000 tail
   assert.equal(Number(match[1]), 20_000);
@@ -48,12 +50,18 @@ test('error messages are redacted too — they often quote the bad input', () =>
   });
   assert.equal(result.success, false);
   assert.ok(!result.success && result.error.includes('[REDACTED]'));
-  assert.ok(!result.success && result.error.includes('supersecretvalue') === false);
+  assert.ok(
+    !result.success && result.error.includes('supersecretvalue') === false,
+  );
 });
 
 test('retryable is carried through unchanged', () => {
   for (const retryable of [true, false]) {
-    const result = normalizeToolResult({ success: false, error: 'x', retryable });
+    const result = normalizeToolResult({
+      success: false,
+      error: 'x',
+      retryable,
+    });
     assert.equal(result.success === false && result.retryable, retryable);
   }
 });
@@ -70,7 +78,11 @@ test('REGRESSION: redaction runs before capping', () => {
   assert.equal(result.success, true);
   assert.ok(result.success);
 
-  assert.equal(result.content.includes(secret), false, 'whole secret must not appear');
+  assert.equal(
+    result.content.includes(secret),
+    false,
+    'whole secret must not appear',
+  );
   // No partial either — check every prefix long enough to be identifiable.
   for (let len = 12; len < secret.length; len++) {
     assert.equal(

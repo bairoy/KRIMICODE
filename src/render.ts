@@ -7,8 +7,21 @@ const GREEN = '\x1b[32m';
 export const YELLOW = '\x1b[33m';
 export const BOLD_RED = '\x1b[1;31m';
 
+/**
+ * Wipe the screen, the scrollback, and put the cursor back at the top.
+ *
+ * `2J` clears what is visible, `3J` clears the scrollback buffer, and `H` homes
+ * the cursor. The scrollback matters: without `3J` the user can scroll up and
+ * read a conversation the agent has been told to forget, which makes `/clear`
+ * look like it did not work.
+ */
+export const CLEAR_SCREEN = '\x1b[2J\x1b[3J\x1b[H';
+
 /** Longest run of identical leading array elements. */
-function commonPrefixLength(a: readonly string[], b: readonly string[]): number {
+function commonPrefixLength(
+  a: readonly string[],
+  b: readonly string[],
+): number {
   let i = 0;
   while (i < a.length && i < b.length && a[i] === b[i]) i++;
   return i;
@@ -22,7 +35,11 @@ function commonPrefixLength(a: readonly string[], b: readonly string[]): number 
  * new_str share a long prefix shows two identical truncated lines — which
  * tells the user nothing about what they are approving.
  */
-export function renderDiff(before: string, after: string, indent: string): string {
+export function renderDiff(
+  before: string,
+  after: string,
+  indent: string,
+): string {
   const beforeLines = before.split('\n');
   const afterLines = after.split('\n');
 
@@ -65,9 +82,9 @@ export function renderDiff(before: string, after: string, indent: string): strin
   const MAX_LINES = 6;
   const render = (lines: string[], sign: string, color: string): string[] => {
     if (lines.length === 0) return [];
-    const shown = lines.slice(0, MAX_LINES).map(
-      (line) => `${indent}${color}${sign} ${fit(line)}${RESET}`,
-    );
+    const shown = lines
+      .slice(0, MAX_LINES)
+      .map((line) => `${indent}${color}${sign} ${fit(line)}${RESET}`);
     if (lines.length > MAX_LINES) {
       shown.push(
         `${indent}${DIM}${sign} … ${lines.length - MAX_LINES} more lines${RESET}`,
@@ -78,7 +95,9 @@ export function renderDiff(before: string, after: string, indent: string): strin
 
   const context =
     head > 0 || tail > 0
-      ? [`${indent}${DIM}(${head + tail} unchanged line${head + tail === 1 ? '' : 's'} hidden)${RESET}`]
+      ? [
+          `${indent}${DIM}(${head + tail} unchanged line${head + tail === 1 ? '' : 's'} hidden)${RESET}`,
+        ]
       : [];
 
   return [

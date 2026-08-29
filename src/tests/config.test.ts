@@ -38,9 +38,18 @@ test('MAX_CONTEXT_TOKENS is coerced from its string form', () => {
 test('an implausibly small or non-numeric context window is rejected', () => {
   // A window of "8" would put every conversation permanently over budget and
   // compact on every single request.
-  assert.throws(() => loadConfig(env({ MAX_CONTEXT_TOKENS: '8' })), /MAX_CONTEXT_TOKENS/);
-  assert.throws(() => loadConfig(env({ MAX_CONTEXT_TOKENS: 'lots' })), /MAX_CONTEXT_TOKENS/);
-  assert.throws(() => loadConfig(env({ MAX_CONTEXT_TOKENS: '32000.5' })), /MAX_CONTEXT_TOKENS/);
+  assert.throws(
+    () => loadConfig(env({ MAX_CONTEXT_TOKENS: '8' })),
+    /MAX_CONTEXT_TOKENS/,
+  );
+  assert.throws(
+    () => loadConfig(env({ MAX_CONTEXT_TOKENS: 'lots' })),
+    /MAX_CONTEXT_TOKENS/,
+  );
+  assert.throws(
+    () => loadConfig(env({ MAX_CONTEXT_TOKENS: '32000.5' })),
+    /MAX_CONTEXT_TOKENS/,
+  );
 });
 
 test('unrelated environment variables are ignored', () => {
@@ -65,7 +74,10 @@ test('a missing variable is named without revealing any value', () => {
 });
 
 test('an empty value is rejected, not treated as present', () => {
-  assert.throws(() => loadConfig(env({ OPENAI_API_KEY: '' })), /OPENAI_API_KEY/);
+  assert.throws(
+    () => loadConfig(env({ OPENAI_API_KEY: '' })),
+    /OPENAI_API_KEY/,
+  );
 });
 
 test('a structurally invalid base URL is rejected', () => {
@@ -79,7 +91,9 @@ test('a well-formed but unreachable URL is accepted', () => {
   // Config validates shape, not reachability — deliberately, so startup is
   // neither slow nor flaky. The cost is that a wrong-but-valid URL surfaces
   // later as a connection error.
-  const config = loadConfig(env({ OPENAI_BASE_URL: 'http://localhost:8000/v1' }));
+  const config = loadConfig(
+    env({ OPENAI_BASE_URL: 'http://localhost:8000/v1' }),
+  );
   assert.equal(config.baseURL, 'http://localhost:8000/v1');
 });
 

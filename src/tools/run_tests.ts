@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { runProgram } from '../exec.js';
+import { runShim } from '../exec.js';
 import { defineTool } from './define.js';
 
 const InputSchema = z.object({
@@ -59,7 +59,11 @@ export const runTestsTool = defineTool({
 
     // `npm test` rather than the raw script: npm puts node_modules/.bin on
     // PATH, which the script almost certainly depends on.
-    const result = await runProgram('npm', ['test'], {
+    //
+    // runShim, not runProgram: on Windows `npm` is `npm.cmd`, a batch file that
+    // Node refuses to spawn without a shell. The argv here is fixed and no
+    // model input reaches it, which is the condition runShim enforces.
+    const result = await runShim('npm', ['test'], {
       cwd: context.workspaceRoot,
       timeoutMs: input.timeout_ms ?? DEFAULT_TIMEOUT_MS,
       maxOutputChars: MAX_OUTPUT_CHARS,
