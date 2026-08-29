@@ -1,6 +1,5 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import { getEventListeners } from 'node:events';
 
 import { runCommand } from '../exec.js';
@@ -8,7 +7,7 @@ import { isWindows } from '../platform.js';
 import { defineTool } from '../tools/define.js';
 import type { ToolContext } from '../tools/define.js';
 import { z } from 'zod';
-import { spyGate } from './helpers.js';
+import { countLiveMatching, spyGate } from './helpers.js';
 
 const cwd = process.cwd();
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -18,19 +17,6 @@ const sleeper = (ms: number) => `node -e "setTimeout(()=>{},${ms})"`;
 
 /** Process-group semantics are POSIX-specific; Windows uses `taskkill /T`. */
 const POSIX_ONLY = { skip: isWindows(process.platform) };
-
-function countMatching(marker: string): Promise<number> {
-  return new Promise((resolve) => {
-    const child = spawn('/bin/sh', [
-      '-c',
-      `pgrep -f "sleep ${marker}" | wc -l`,
-    ]);
-    let out = '';
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => (out += chunk));
-    child.on('close', () => resolve(Number(out.trim())));
-  });
-}
 
 // --- exec.ts ----------------------------------------------------------------
 
@@ -74,7 +60,11 @@ test(
     });
 
     await wait(600); // let SIGTERM land
-    assert.equal(await countMatching(marker), 0, 'orphaned processes survived');
+    assert.equal(
+      await countLiveMatching(marker),
+      0,
+      'orphaned processes survived',
+    );
   },
 );
 
@@ -100,7 +90,7 @@ test(
     const marker = `98${Date.now() % 100000}`;
     await runCommand(`sleep ${marker}`, { cwd, signal: AbortSignal.abort() });
 
-    assert.equal(await countMatching(marker), 0);
+    assert.equal(await countLiveMatching(marker), 0);
   },
 );
 

@@ -1,8 +1,8 @@
-import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { runCommand } from '../exec.js';
 import { isWindows } from '../platform.js';
+import { countLiveMatching } from './helpers.js';
 
 const cwd = process.cwd();
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -19,20 +19,6 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const node = (script: string): string => `node -e "${script}"`;
 
 const POSIX_ONLY = { skip: isWindows(process.platform) };
-
-/** How many processes match this marker right now. POSIX-only. */
-function countMatching(marker: string): Promise<number> {
-  return new Promise((resolve) => {
-    const child = spawn('/bin/sh', [
-      '-c',
-      `pgrep -f "sleep ${marker}" | wc -l`,
-    ]);
-    let out = '';
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => (out += chunk));
-    child.on('close', () => resolve(Number(out.trim())));
-  });
-}
 
 test('stdout and stderr are captured separately', async () => {
   const result = await runCommand(
@@ -147,7 +133,7 @@ test(
     // process-group concept and so cannot be checked this way.
     const marker = '31421';
     assert.equal(
-      await countMatching(marker),
+      await countLiveMatching(marker),
       0,
       'stale processes from a previous run',
     );
@@ -160,7 +146,7 @@ test(
 
     await wait(800); // let SIGTERM land
     assert.equal(
-      await countMatching(marker),
+      await countLiveMatching(marker),
       0,
       'orphaned grandchildren survived',
     );
