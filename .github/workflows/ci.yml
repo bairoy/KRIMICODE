@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to the same branch makes the previous run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is here because the platform branches in src/platform.ts
+        # cannot be exercised for real anywhere else. Without this job, Windows
+        # support would be code nobody has ever run.
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        # 20.12 is the floor declared in package.json engines; 22 is current
+        # LTS. Both are tested so a change cannot silently require a newer API.
+        node: ['20.12', '22']
+        # One OS needs both Node versions; the others only need current, since
+        # the version-specific risk is in our own code, not the platform.
+        exclude:
+          - os: windows-latest
+            node: '20.12'
+          - os: macos-latest
+            node: '20.12'
+
+    name: ${{ matrix.os }} · node ${{ matrix.node }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci
+
+      # search_code falls back to grep when ripgrep is absent, and Windows has
+      # no grep — so there it is a real dependency rather than an optimisation.
+      # Installing it here means CI tests the path users actually get.
+      - name: Install ripgrep (Windows)
+        if: matrix.os == 'windows-latest'
+        run: choco install ripgrep -y --no-progress
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint and format check
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build

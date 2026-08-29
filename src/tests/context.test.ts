@@ -25,7 +25,9 @@ function turn(n: number, toolChars = 50): Message[] {
     {
       role: 'assistant',
       content: `thinking about ${n}`,
-      toolCalls: [{ id: `call-${n}`, name: 'read_file', argsJson: '{"path":"a.ts"}' }],
+      toolCalls: [
+        { id: `call-${n}`, name: 'read_file', argsJson: '{"path":"a.ts"}' },
+      ],
     },
     { role: 'tool', toolCallId: `call-${n}`, content: 'x'.repeat(toolChars) },
     { role: 'assistant', content: `answer ${n}` },
@@ -150,7 +152,10 @@ test('compaction triggers below the window, leaving room for the reply', () => {
     { role: 'user', content: 'x'.repeat(budgetTokens(policy) * 4) },
   ];
   assert.equal(needsCompaction(over, policy), true);
-  assert.equal(needsCompaction([{ role: 'user', content: 'hi' }], policy), false);
+  assert.equal(
+    needsCompaction([{ role: 'user', content: 'hi' }], policy),
+    false,
+  );
 });
 
 // --- shrinkToolResults ------------------------------------------------------

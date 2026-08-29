@@ -74,7 +74,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       throw new Error('Invalid environment:\n  EXTRA_BODY: must be valid JSON');
     }
     if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-      throw new Error('Invalid environment:\n  EXTRA_BODY: must be a JSON object');
+      throw new Error(
+        'Invalid environment:\n  EXTRA_BODY: must be a JSON object',
+      );
     }
     extraBody = raw as Record<string, unknown>;
   }

@@ -8,7 +8,11 @@ import {
 
 test('a tool call split across chunks is reassembled', () => {
   const acc = new ToolCallAccumulator();
-  acc.add({ index: 0, id: 'call_1', function: { name: 'read_file', arguments: '' } });
+  acc.add({
+    index: 0,
+    id: 'call_1',
+    function: { name: 'read_file', arguments: '' },
+  });
   acc.add({ index: 0, function: { arguments: '{"pa' } });
   acc.add({ index: 0, function: { arguments: 'th":"a.' } });
   acc.add({ index: 0, function: { arguments: 'txt"}' } });
@@ -22,11 +26,21 @@ test('a tool call split across chunks is reassembled', () => {
 
 test('id and name are set once, so a provider that repeats them is fine', () => {
   const acc = new ToolCallAccumulator();
-  acc.add({ index: 0, id: 'call_1', function: { name: 'read_file', arguments: '{' } });
-  acc.add({ index: 0, id: 'call_1', function: { name: 'read_file', arguments: '}' } });
+  acc.add({
+    index: 0,
+    id: 'call_1',
+    function: { name: 'read_file', arguments: '{' },
+  });
+  acc.add({
+    index: 0,
+    id: 'call_1',
+    function: { name: 'read_file', arguments: '}' },
+  });
 
   const { complete } = acc.drain();
-  assert.deepEqual(complete, [{ id: 'call_1', name: 'read_file', argsJson: '{}' }]);
+  assert.deepEqual(complete, [
+    { id: 'call_1', name: 'read_file', argsJson: '{}' },
+  ]);
 });
 
 test('REGRESSION: a later chunk without id must not erase the id', () => {
@@ -43,15 +57,31 @@ test('REGRESSION: a later chunk without id must not erase the id', () => {
 
 test('parallel calls are kept apart by index even when interleaved', () => {
   const acc = new ToolCallAccumulator();
-  acc.add({ index: 0, id: 'a', function: { name: 'read_file', arguments: '{"x"' } });
-  acc.add({ index: 1, id: 'b', function: { name: 'run_command', arguments: '{"y"' } });
+  acc.add({
+    index: 0,
+    id: 'a',
+    function: { name: 'read_file', arguments: '{"x"' },
+  });
+  acc.add({
+    index: 1,
+    id: 'b',
+    function: { name: 'run_command', arguments: '{"y"' },
+  });
   acc.add({ index: 0, function: { arguments: ':1}' } });
   acc.add({ index: 1, function: { arguments: ':2}' } });
 
   const { complete } = acc.drain();
   assert.equal(complete.length, 2);
-  assert.deepEqual(complete[0], { id: 'a', name: 'read_file', argsJson: '{"x":1}' });
-  assert.deepEqual(complete[1], { id: 'b', name: 'run_command', argsJson: '{"y":2}' });
+  assert.deepEqual(complete[0], {
+    id: 'a',
+    name: 'read_file',
+    argsJson: '{"x":1}',
+  });
+  assert.deepEqual(complete[1], {
+    id: 'b',
+    name: 'run_command',
+    argsJson: '{"y":2}',
+  });
 });
 
 test('calls come back in index order regardless of arrival order', () => {
@@ -98,7 +128,10 @@ test('malformed reasoning payloads yield an empty string rather than throwing', 
   assert.equal(extractReasoning({}), '');
   assert.equal(extractReasoning({ reasoning: 42 }), '');
   assert.equal(extractReasoning({ reasoning_details: 'not-an-array' }), '');
-  assert.equal(extractReasoning({ reasoning_details: [null, 7, { text: 'x' }] }), 'x');
+  assert.equal(
+    extractReasoning({ reasoning_details: [null, 7, { text: 'x' }] }),
+    'x',
+  );
   assert.equal(extractReasoning({ reasoning_details: [{ nope: 1 }] }), '');
   assert.equal(extractReasoning(null), '');
 });
@@ -121,7 +154,11 @@ test('our message shape is translated to the wire format', () => {
     role: 'assistant',
     content: null,
     tool_calls: [
-      { id: 'c1', type: 'function', function: { name: 'read_file', arguments: '{"path":"a"}' } },
+      {
+        id: 'c1',
+        type: 'function',
+        function: { name: 'read_file', arguments: '{"path":"a"}' },
+      },
     ],
   });
   assert.deepEqual(wire[3], {

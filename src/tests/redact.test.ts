@@ -4,7 +4,9 @@ import { redact, registerSecret } from '../redact.js';
 
 test('exact registered secrets are removed everywhere they appear', () => {
   registerSecret('sk-or-v1-0123456789abcdefghij');
-  const out = redact('a sk-or-v1-0123456789abcdefghij b sk-or-v1-0123456789abcdefghij');
+  const out = redact(
+    'a sk-or-v1-0123456789abcdefghij b sk-or-v1-0123456789abcdefghij',
+  );
   assert.equal(out, 'a [REDACTED] b [REDACTED]');
 });
 
@@ -64,7 +66,11 @@ test('two PEM blocks are redacted separately, not merged', () => {
   const block = (n: string) =>
     `-----BEGIN PRIVATE KEY-----\nbody${n}\n-----END PRIVATE KEY-----`;
   const out = redact(`${block('A')}\nKEEP-THIS-TEXT\n${block('B')}`);
-  assert.equal(out.includes('KEEP-THIS-TEXT'), true, 'lazy match must stop at first END');
+  assert.equal(
+    out.includes('KEEP-THIS-TEXT'),
+    true,
+    'lazy match must stop at first END',
+  );
   assert.equal(out.includes('bodyA'), false);
   assert.equal(out.includes('bodyB'), false);
 });
@@ -72,7 +78,10 @@ test('two PEM blocks are redacted separately, not merged', () => {
 test('secret-shaped assignments keep the key name and drop the value', () => {
   // The point: "hunter2correcthorse" has no recognisable shape. Only the key
   // name reveals it is a secret.
-  assert.equal(redact('DB_PASSWORD=hunter2correcthorse'), 'DB_PASSWORD=[REDACTED]');
+  assert.equal(
+    redact('DB_PASSWORD=hunter2correcthorse'),
+    'DB_PASSWORD=[REDACTED]',
+  );
   assert.equal(redact('api_key: "somethingsecret"'), 'api_key: "[REDACTED]"');
   assert.equal(redact('ACCESS_KEY = plainvalue123'), 'ACCESS_KEY = [REDACTED]');
 });
@@ -85,7 +94,10 @@ test('quotes are preserved symmetrically via the back-reference', () => {
 test('non-secret assignments are left alone', () => {
   assert.equal(redact('region = ap-south-1'), 'region = ap-south-1');
   assert.equal(redact('retry_limit = 3'), 'retry_limit = 3');
-  assert.equal(redact('service_name = billing-worker'), 'service_name = billing-worker');
+  assert.equal(
+    redact('service_name = billing-worker'),
+    'service_name = billing-worker',
+  );
 });
 
 test('ordinary prose survives untouched', () => {

@@ -1,8 +1,15 @@
 {
   "name": "krimicode",
   "version": "0.1.0",
+  "description": "A terminal coding agent that talks to any OpenAI-compatible endpoint.",
   "private": true,
   "type": "module",
+  "bin": {
+    "krimicode": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
   "engines": {
     "node": ">=20.12"
   },
@@ -11,13 +18,17 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test \"src/tests/*.test.ts\""
+    "lint": "biome check src",
+    "format": "biome check --write src",
+    "test": "node --import tsx --test \"src/tests/*.test.ts\"",
+    "prepare": "npm run build"
   },
   "dependencies": {
     "openai": "^7.5.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.11",
     "@types/node": "^26.2.0",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2"

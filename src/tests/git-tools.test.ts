@@ -73,7 +73,9 @@ test('git_diff distinguishes staged from unstaged', async () => {
   await git(['add', 'tracked.txt'], repo);
 
   const unstaged = await diff();
-  assert.ok(unstaged.success && unstaged.content.includes('No unstaged changes'));
+  assert.ok(
+    unstaged.success && unstaged.content.includes('No unstaged changes'),
+  );
 
   const staged = await diff({ staged: true });
   assert.ok(staged.success && staged.content.includes('+changed'));
@@ -129,7 +131,11 @@ test('run_tests is EXECUTE and passes through the gate', async () => {
 });
 
 test('run_tests never executes when denied', async () => {
-  const result = await runTestsTool.run('{}', { workspaceRoot: repo }, denyAll());
+  const result = await runTestsTool.run(
+    '{}',
+    { workspaceRoot: repo },
+    denyAll(),
+  );
   assert.equal(result.success, false);
   assert.ok(!result.success && result.error.startsWith('Denied by the user'));
 });
@@ -140,18 +146,30 @@ test('run_tests explains itself when the project has no test script', async () =
     JSON.stringify({ name: 'x', scripts: { build: 'tsc' } }),
     'utf8',
   );
-  const result = await runTestsTool.run('{}', { workspaceRoot: repo }, allowAll());
+  const result = await runTestsTool.run(
+    '{}',
+    { workspaceRoot: repo },
+    allowAll(),
+  );
   assert.equal(result.success, false);
   assert.ok(!result.success && result.error.includes('No "test" script'));
 });
 
 test('run_tests handles a missing or malformed package.json', async () => {
-  const missing = await runTestsTool.run('{}', { workspaceRoot: bare }, allowAll());
+  const missing = await runTestsTool.run(
+    '{}',
+    { workspaceRoot: bare },
+    allowAll(),
+  );
   assert.equal(missing.success, false);
   assert.ok(!missing.success && missing.error.includes('No "test" script'));
 
   await writeFile(join(repo, 'package.json'), '{not json', 'utf8');
-  const malformed = await runTestsTool.run('{}', { workspaceRoot: repo }, allowAll());
+  const malformed = await runTestsTool.run(
+    '{}',
+    { workspaceRoot: repo },
+    allowAll(),
+  );
   assert.equal(malformed.success, false);
   assert.ok(!malformed.success && malformed.error.includes('No "test" script'));
 });

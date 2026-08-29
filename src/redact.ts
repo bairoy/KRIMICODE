@@ -5,7 +5,13 @@
  * `normalizeToolResult` — so that no tool can forget to apply it.
  */
 
-const PLACEHOLDER = '[REDACTED]';
+/**
+ * What replaces a secret. Exported because a tool that receives this text back
+ * from the model needs to recognise it: the model can only ever have seen the
+ * placeholder, never the real value, so matching it against a file is
+ * guaranteed to fail.
+ */
+export const PLACEHOLDER = '[REDACTED]';
 
 /** Exact values known at runtime, e.g. the configured API key. */
 const knownSecrets = new Set<string>();

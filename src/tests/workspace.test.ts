@@ -114,3 +114,18 @@ test('sensitivity is judged on the basename, not the whole path', () => {
   assert.equal(isSensitivePath('/home/.env/notes.txt'), false);
   assert.equal(isSensitivePath('/home/notes/.env'), true);
 });
+
+test('a name ending in .env is sensitive, not just the .env dotfile', () => {
+  // The anchored pattern only caught names starting with ".env", so
+  // "production.env" and "secrets.env" — both common in real projects — were
+  // treated as ordinary files and could be written under a standing approval.
+  for (const name of ['production.env', 'secrets.env', 'creds.env']) {
+    assert.equal(isSensitivePath(name), true, `${name} should be sensitive`);
+  }
+});
+
+test('widening to *.env does not catch ordinary source files', () => {
+  for (const name of ['environment.ts', 'benv', 'my.envx', 'agent.ts']) {
+    assert.equal(isSensitivePath(name), false, `${name} should be ordinary`);
+  }
+});

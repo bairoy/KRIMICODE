@@ -13,19 +13,35 @@ import {
 import { normalizeToolResult } from './normalize.js';
 import type { PermissionGate } from './permissions.js';
 import { getTool, toolSpecs } from './tools/index.js';
-import type {
-  Message,
-  ModelProvider,
-  ToolCall,
-  ToolResult,
-} from './types.js';
+import type { Message, ModelProvider, ToolCall, ToolResult } from './types.js';
 
 /** Runaway-loop guard: a model that keeps calling tools must still terminate. */
 const MAX_TURNS = 30;
 
+/**
+ * How many times the identical failing call is allowed before it stops being
+ * executed at all.
+ *
+ * Two, so one retry is still permitted — a genuinely transient failure (a
+ * timeout, a file being written just then) deserves a second attempt. The
+ * third identical call is refused without running.
+ */
+const MAX_IDENTICAL_FAILURES = 2;
+
 const SYSTEM_PROMPT = [
-  'You are a terminal coding assistant working inside the user\'s workspace.',
+  "You are a terminal coding assistant working inside the user's workspace.",
   'Use the provided tools to inspect real files rather than guessing.',
+  // Without this, a weaker model answers a "change this file" request by
+  // printing the new code in its reply and calling it done. The user reads a
+  // confident answer and the file is untouched.
+  'When the user asks you to create or change a file, do it with the tools.',
+  'Code in your reply is not the work — nothing has changed until a tool call',
+  'succeeds.',
+  // The one workflow the tool set does not make obvious: neither tool
+  // overwrites, so replacing a file means reading it and editing what is there.
+  'create_file makes new files only and never overwrites. To replace what is',
+  'already in a file, read_file it first, then edit_file using its exact',
+  'current text as old_str.',
   'Tool results are JSON: {"success":true,"content":...} or',
   '{"success":false,"error":...,"retryable":...}. If a call fails, read the',
   'error and correct the arguments instead of repeating the same call.',
@@ -39,6 +55,28 @@ const CANCELLED_RESULT: ToolResult = {
   retryable: false,
 };
 
+/**
+ * The runaway-loop guard tripped: the model kept calling tools without ever
+ * producing a final answer.
+ *
+ * A distinct type rather than a bare Error so the CLI can say something
+ * actionable. Rendered identically to a network failure, this reads as "the
+ * agent is broken" when the real fix is usually to narrow the request.
+ *
+ * History is well-formed when this is thrown — the loop only exits after every
+ * announced tool call has received its result — so the session stays usable
+ * and the user can simply continue.
+ */
+export class MaxTurnsError extends Error {
+  readonly turns: number;
+
+  constructor(turns: number) {
+    super(`Stopped after ${turns} turns without a final answer.`);
+    this.name = 'MaxTurnsError';
+    this.turns = turns;
+  }
+}
+
 /** Reported to the CLI after a compaction, so the user knows history was folded. */
 export interface CompactionInfo {
   readonly tokensBefore: number;
@@ -48,9 +86,22 @@ export interface CompactionInfo {
   readonly fallback: boolean;
 }
 
+/**
+ * The resumable part of a conversation.
+ *
+ * Deliberately just these two fields: everything else the agent needs is either
+ * configuration or rebuilt per request.
+ */
+export interface SessionState {
+  readonly history: readonly Message[];
+  readonly summary: string | null;
+}
+
 export interface AgentOptions {
   readonly provider: ModelProvider;
   readonly model: string;
+  /** Restores a saved conversation. Omit to start fresh. */
+  readonly initialState?: SessionState;
   /** Called with each streamed text fragment, for incremental rendering. */
   readonly onText: (text: string) => void;
   /** Called with each streamed reasoning fragment. Display only. */
@@ -65,7 +116,8 @@ export interface AgentOptions {
 
 export class Agent {
   readonly #provider: ModelProvider;
-  readonly #model: string;
+  /** Mutable so `/model` can switch it without rebuilding the session. */
+  #model: string;
   readonly #onText: (text: string) => void;
   readonly #onReasoning: (text: string) => void;
   readonly #workspaceRoot: string;
@@ -86,6 +138,18 @@ export class Agent {
   /** Summary of everything elided so far, or null while nothing has been. */
   #summary: string | null = null;
 
+  /**
+   * How many times each exact tool call has already failed, keyed by name and
+   * arguments.
+   *
+   * Only failures are counted: calling `git_status` five times because the
+   * working tree keeps changing is legitimate, and repeating a call that
+   * *worked* says nothing. What this catches is the model retrying something
+   * that cannot succeed — which it will do until MAX_TURNS, burning a request
+   * and real money on each pass.
+   */
+  readonly #failedCalls = new Map<string, number>();
+
   constructor(options: AgentOptions) {
     this.#provider = options.provider;
     this.#model = options.model;
@@ -97,6 +161,50 @@ export class Agent {
     this.#onToolEnd = options.onToolEnd;
     this.#onCompact = options.onCompact;
     this.#policy = defaultPolicy(options.maxContextTokens);
+
+    if (options.initialState) {
+      this.#history = [...options.initialState.history];
+      this.#summary = options.initialState.summary;
+    }
+  }
+
+  get model(): string {
+    return this.#model;
+  }
+
+  set model(name: string) {
+    this.#model = name;
+  }
+
+  /**
+   * Forget the conversation and start over.
+   *
+   * Both fields have to go together: a summary describing turns that are no
+   * longer in history would be silently reintroduced into the next request.
+   */
+  reset(): void {
+    this.#history = [];
+    this.#summary = null;
+    // A new conversation deserves a clean slate: a call that could not work
+    // before may be exactly right once the context has changed.
+    this.#failedCalls.clear();
+  }
+
+  /**
+   * Everything needed to rebuild this conversation later.
+   *
+   * History and summary are the whole of the resumable state — the system
+   * prompt is rebuilt from them on every request, so it is not worth storing.
+   * Copied rather than returned live, so a caller holding a snapshot does not
+   * see it mutate under them mid-turn.
+   */
+  snapshot(): SessionState {
+    return { history: [...this.#history], summary: this.#summary };
+  }
+
+  /** True when nothing has been said yet — used to avoid saving empty sessions. */
+  get isEmpty(): boolean {
+    return this.#history.length === 0;
   }
 
   /**
@@ -151,7 +259,7 @@ export class Agent {
       }
     }
 
-    throw new Error(`Exceeded ${MAX_TURNS} turns without a final answer.`);
+    throw new MaxTurnsError(MAX_TURNS);
   }
 
   async #runToolReported(
@@ -255,6 +363,37 @@ export class Agent {
    * history.
    */
   async #runTool(
+    call: ToolCall,
+    signal: AbortSignal | undefined,
+  ): Promise<ToolResult> {
+    // Wraps every dispatch path, the unknown-tool one included: a model that
+    // keeps inventing the same nonexistent tool is in the same runaway loop as
+    // one repeating an impossible edit, and each attempt costs a request.
+    const key = `${call.name} ${call.argsJson}`;
+    const failures = this.#failedCalls.get(key) ?? 0;
+
+    // Identical arguments, so identical outcome. Refuse without running rather
+    // than spend another request, another permission prompt, and possibly
+    // another side effect on a call that has already proven it cannot work.
+    if (failures >= MAX_IDENTICAL_FAILURES) {
+      return normalizeToolResult({
+        success: false,
+        error:
+          `This exact ${call.name} call has already failed ${failures} times ` +
+          'with the same arguments, so it was not run again. Repeating it ' +
+          'will not help. Change the arguments, use a different tool, or ' +
+          'explain to the user what is blocking you.',
+        retryable: false,
+      });
+    }
+
+    const result = await this.#dispatch(call, signal);
+    if (!result.success) this.#failedCalls.set(key, failures + 1);
+    return result;
+  }
+
+  /** The dispatch itself, split out so the repeat guard covers all of it. */
+  async #dispatch(
     call: ToolCall,
     signal: AbortSignal | undefined,
   ): Promise<ToolResult> {

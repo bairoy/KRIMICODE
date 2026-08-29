@@ -27,7 +27,11 @@ function probeTool(options: { throws?: boolean } = {}) {
 
 test('valid arguments reach the handler fully typed', async () => {
   const { tool, state } = probeTool();
-  const result = await tool.run(JSON.stringify({ value: 'hi' }), context, allowAll());
+  const result = await tool.run(
+    JSON.stringify({ value: 'hi' }),
+    context,
+    allowAll(),
+  );
   assert.deepEqual(result, { success: true, content: 'got hi' });
   assert.equal(state.lastInput?.value, 'hi');
 });
@@ -63,7 +67,11 @@ test('empty arguments are treated as an empty object, not a parse error', async 
 
 test('schema violations are retryable and name the offending field', async () => {
   const { tool, state } = probeTool();
-  const result = await tool.run(JSON.stringify({ wrong: 1 }), context, allowAll());
+  const result = await tool.run(
+    JSON.stringify({ wrong: 1 }),
+    context,
+    allowAll(),
+  );
   assert.equal(result.success, false);
   assert.ok(!result.success && result.retryable);
   assert.ok(!result.success && result.error.includes('value'));
@@ -72,7 +80,11 @@ test('schema violations are retryable and name the offending field', async () =>
 
 test('a throwing handler is contained, not propagated', async () => {
   const { tool } = probeTool({ throws: true });
-  const result = await tool.run(JSON.stringify({ value: 'x' }), context, allowAll());
+  const result = await tool.run(
+    JSON.stringify({ value: 'x' }),
+    context,
+    allowAll(),
+  );
   assert.equal(result.success, false);
   assert.ok(!result.success && result.error.includes('handler exploded'));
   assert.ok(!result.success && result.retryable === false);
@@ -80,7 +92,11 @@ test('a throwing handler is contained, not propagated', async () => {
 
 test('ARCHITECTURE §4: the gate runs before the handler', async () => {
   const { tool, state } = probeTool();
-  const result = await tool.run(JSON.stringify({ value: 'x' }), context, denyAll());
+  const result = await tool.run(
+    JSON.stringify({ value: 'x' }),
+    context,
+    denyAll(),
+  );
   assert.equal(result.success, false);
   assert.equal(state.ran, 0, 'a denied call must never execute');
   assert.ok(!result.success && result.error.startsWith('Denied by the user'));
@@ -104,7 +120,11 @@ test('classification is derived from validated input', async () => {
 
 test('JSON Schema is derived from the Zod schema, with $schema stripped', () => {
   const { tool } = probeTool();
-  assert.equal('$schema' in tool.parameters, false, 'providers reject unknown top-level keys');
+  assert.equal(
+    '$schema' in tool.parameters,
+    false,
+    'providers reject unknown top-level keys',
+  );
   assert.equal(tool.parameters['type'], 'object');
   const properties = tool.parameters['properties'] as Record<string, unknown>;
   assert.ok('value' in properties);
@@ -112,8 +132,11 @@ test('JSON Schema is derived from the Zod schema, with $schema stripped', () => 
 });
 
 test('the registry exposes exactly the registered tools', () => {
-  const names = toolSpecs().map((spec) => spec.name).sort();
+  const names = toolSpecs()
+    .map((spec) => spec.name)
+    .sort();
   assert.deepEqual(names, [
+    'create_file',
     'edit_file',
     'git_diff',
     'git_status',
@@ -132,7 +155,10 @@ test('an unknown tool name resolves to undefined rather than throwing', () => {
 
 test('every registered tool advertises a description and parameters', () => {
   for (const spec of toolSpecs()) {
-    assert.ok(spec.description.length > 20, `${spec.name} needs a real description`);
+    assert.ok(
+      spec.description.length > 20,
+      `${spec.name} needs a real description`,
+    );
     assert.equal(spec.parameters['type'], 'object', spec.name);
   }
 });

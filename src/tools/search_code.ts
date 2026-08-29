@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { runProgram } from '../exec.js';
+import { isWindows } from '../platform.js';
 import { resolveInWorkspace, WorkspaceError } from '../workspace.js';
 import { defineTool } from './define.js';
 
@@ -11,7 +12,9 @@ const InputSchema = z.object({
   path: z
     .string()
     .optional()
-    .describe('Directory or file to search, relative to the workspace root. Defaults to ".".'),
+    .describe(
+      'Directory or file to search, relative to the workspace root. Defaults to ".".',
+    ),
   literal: z
     .boolean()
     .optional()
@@ -68,7 +71,10 @@ async function hasRipgrep(cwd: string, signal?: AbortSignal): Promise<boolean> {
   return ripgrepAvailable;
 }
 
-function ripgrepArgs(input: z.infer<typeof InputSchema>, target: string): string[] {
+function ripgrepArgs(
+  input: z.infer<typeof InputSchema>,
+  target: string,
+): string[] {
   const args = ['--line-number', '--no-heading', '--color', 'never', '--text'];
   if (input.literal === true) args.push('--fixed-strings');
   if (input.case_insensitive === true) args.push('--ignore-case');
@@ -79,7 +85,10 @@ function ripgrepArgs(input: z.infer<typeof InputSchema>, target: string): string
   return args;
 }
 
-function grepArgs(input: z.infer<typeof InputSchema>, target: string): string[] {
+function grepArgs(
+  input: z.infer<typeof InputSchema>,
+  target: string,
+): string[] {
   const args = ['-r', '-n', '-I'];
   args.push(input.literal === true ? '-F' : '-E');
   if (input.case_insensitive === true) args.push('-i');
@@ -118,6 +127,21 @@ export const searchCodeTool = defineTool({
     }
 
     const useRipgrep = await hasRipgrep(context.workspaceRoot, context.signal);
+
+    // Windows has no grep, so the fallback does not exist there. Say so
+    // plainly — otherwise this surfaces as a bare ENOENT that reads like the
+    // tool is broken rather than like a missing dependency.
+    if (!useRipgrep && isWindows(process.platform)) {
+      return {
+        success: false,
+        error:
+          'search_code needs ripgrep on Windows, and "rg" is not on PATH. ' +
+          'Install it with "winget install BurntSushi.ripgrep.MSVC" and try ' +
+          'again, or use list_files and read_file instead.',
+        retryable: false,
+      };
+    }
+
     const [program, args] = useRipgrep
       ? (['rg', ripgrepArgs(input, target)] as const)
       : (['grep', grepArgs(input, target)] as const);
