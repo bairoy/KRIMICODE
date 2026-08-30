@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { listFilesTool } from '../tools/list_files.js';
-import { searchCodeTool } from '../tools/search_code.js';
-import { allowAll } from './helpers.js';
+import { listFilesTool } from '../../tools/list_files.js';
+import { searchCodeTool } from '../../tools/search_code.js';
+import { allowAll } from '../helpers.js';
 
 let root = '';
 

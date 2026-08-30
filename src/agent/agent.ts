@@ -10,10 +10,11 @@ import {
   shrinkToolResults,
   type CompactionPolicy,
 } from './context.js';
-import { normalizeToolResult } from './normalize.js';
-import type { PermissionGate } from './permissions.js';
-import { getTool, toolSpecs } from './tools/index.js';
-import type { Message, ModelProvider, ToolCall, ToolResult } from './types.js';
+import { counted } from '../plural.js';
+import { normalizeToolResult } from '../tools/normalize.js';
+import type { PermissionGate } from '../permissions.js';
+import { getTool, toolSpecs } from '../tools/index.js';
+import type { Message, ModelProvider, ToolCall, ToolResult } from '../types.js';
 
 /** Runaway-loop guard: a model that keeps calling tools must still terminate. */
 const MAX_TURNS = 30;
@@ -71,7 +72,7 @@ export class MaxTurnsError extends Error {
   readonly turns: number;
 
   constructor(turns: number) {
-    super(`Stopped after ${turns} turns without a final answer.`);
+    super(`Stopped after ${counted(turns, 'turn')} without a final answer.`);
     this.name = 'MaxTurnsError';
     this.turns = turns;
   }
@@ -278,14 +279,41 @@ export class Agent {
   }
 
   /**
+   * Fold older turns into the summary now, without waiting for the window to
+   * demand it — what `/compact` calls.
+   *
+   * Useful before an expensive request: compaction that happens on its own
+   * always happens at the worst moment, part-way through a turn the user is
+   * waiting on. Returns null when there was nothing it could safely do.
+   */
+  async compact(signal?: AbortSignal): Promise<CompactionInfo | null> {
+    return this.#compact(true, signal);
+  }
+
+  /**
    * ARCHITECTURE §7. Folds older turns into a running summary once the
    * conversation approaches the window, rather than letting the request grow
    * until the provider rejects it — at which point every later request would
    * carry the same oversized history and the session would be unrecoverable.
    */
   async #compactIfNeeded(signal: AbortSignal | undefined): Promise<void> {
+    await this.#compact(false, signal);
+  }
+
+  /**
+   * The one implementation. `force` is the only difference between the
+   * automatic path and `/compact`: what may be elided, and what must be kept,
+   * is the same question either way — a manual compaction that dropped the
+   * live turn would be a worse bug than never compacting at all.
+   */
+  async #compact(
+    force: boolean,
+    signal: AbortSignal | undefined,
+  ): Promise<CompactionInfo | null> {
     const tokensBefore = estimateTokens(this.#requestMessages());
-    if (!needsCompaction(this.#requestMessages(), this.#policy)) return;
+    if (!force && !needsCompaction(this.#requestMessages(), this.#policy)) {
+      return null;
+    }
 
     const plan = planCompaction(this.#history, this.#policy);
     let fallback = false;
@@ -295,7 +323,7 @@ export class Agent {
       const summary = await this.#summarize(plan.elide, signal);
       // Cancelling mid-summary would otherwise bake the fallback digest into
       // history permanently. Leave it untouched and compact properly next time.
-      if (signal?.aborted) return;
+      if (signal?.aborted) return null;
 
       this.#summary = summary.text;
       this.#history = [...plan.keep];
@@ -315,12 +343,23 @@ export class Agent {
       budgetTokens(this.#policy) - systemTokens,
     );
 
-    this.#onCompact?.({
+    const tokensAfter = estimateTokens(this.#requestMessages());
+
+    // Nothing was elided and nothing shrank: the conversation is too short to
+    // have anything behind the turns that must be kept. Report that honestly
+    // rather than announcing a compaction that did not happen — a note saying
+    // "0 messages summarized, same token count" is how a working command
+    // starts to look broken.
+    if (messagesElided === 0 && tokensAfter === tokensBefore) return null;
+
+    const info: CompactionInfo = {
       tokensBefore,
-      tokensAfter: estimateTokens(this.#requestMessages()),
+      tokensAfter,
       messagesElided,
       fallback,
-    });
+    };
+    this.#onCompact?.(info);
+    return info;
   }
 
   /**

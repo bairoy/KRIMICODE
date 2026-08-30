@@ -7,7 +7,7 @@ import {
   isSensitivePath,
   resolveInWorkspace,
   WorkspaceError,
-} from '../workspace.js';
+} from '../../exec/workspace.js';
 
 let root = '';
 let sibling = '';

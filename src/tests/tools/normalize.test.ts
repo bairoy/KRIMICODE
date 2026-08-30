@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { capOutput, normalizeToolResult } from '../normalize.js';
-import { registerSecret } from '../redact.js';
+import { capOutput, normalizeToolResult } from '../../tools/normalize.js';
+import { registerSecret } from '../../redact.js';
 
 test('output under the cap is returned unchanged', () => {
   const text = 'x'.repeat(29_999);

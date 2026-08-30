@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, beforeEach, test } from 'node:test';
 
-import { createFileTool } from '../tools/create_file.js';
-import { allowAll, denyAll, spyGate } from './helpers.js';
+import { createFileTool } from '../../tools/create_file.js';
+import { allowAll, denyAll, spyGate } from '../helpers.js';
 
 let root = '';
 

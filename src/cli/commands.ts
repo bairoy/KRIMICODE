@@ -14,12 +14,23 @@ export type CommandOutcome =
   /** Not a command at all — send it to the model as an ordinary prompt. */
   | 'not-a-command';
 
+/** What a manual compaction managed to do. */
+export type CompactOutcome =
+  /** History was folded. The CLI has already rendered the details. */
+  | 'compacted'
+  /** Too short to fold anything without losing the turns that must be kept. */
+  | 'nothing-to-do'
+  /** Ctrl-C during summarization. History is untouched. */
+  | 'cancelled';
+
 export interface CommandContext {
   readonly write: (text: string) => void;
   readonly getModel: () => string;
   readonly setModel: (name: string) => void;
   /** Forget the conversation and start a new one. */
   readonly clear: () => void;
+  /** Fold older turns into the summary now, rather than when the window forces it. */
+  readonly compact: () => Promise<CompactOutcome>;
   readonly listTools: () => readonly { name: string; description: string }[];
   /** One line per saved session, newest first. */
   readonly listSessions: () => Promise<readonly string[]>;
@@ -62,6 +73,26 @@ const COMMANDS = new Map<string, CommandSpec>([
       run: (_argument, context) => {
         context.clear();
         context.write('\nconversation cleared.\n\n');
+        return 'handled';
+      },
+    },
+  ],
+  [
+    '/compact',
+    {
+      usage: '/compact',
+      summary: 'summarize older turns now, freeing context',
+      run: async (_argument, context): Promise<CommandOutcome> => {
+        const outcome = await context.compact();
+        if (outcome === 'nothing-to-do') {
+          context.write(
+            '\nnothing to compact — the recent turns are kept verbatim and' +
+              ' there is nothing older.\n\n',
+          );
+        }
+        // 'compacted' and 'cancelled' both report themselves through the CLI's
+        // normal rendering, the same way an automatic compaction does. Saying
+        // it a second time here would just double the line.
         return 'handled';
       },
     },

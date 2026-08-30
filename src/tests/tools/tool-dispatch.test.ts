@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { z } from 'zod';
-import { defineTool } from '../tools/define.js';
-import { getTool, toolSpecs } from '../tools/index.js';
-import { allowAll, denyAll, spyGate } from './helpers.js';
+import { defineTool } from '../../tools/define.js';
+import { getTool, toolSpecs } from '../../tools/index.js';
+import { allowAll, denyAll, spyGate } from '../helpers.js';
 
 const context = { workspaceRoot: process.cwd() };
 

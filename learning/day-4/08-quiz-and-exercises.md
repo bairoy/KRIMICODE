@@ -295,16 +295,50 @@ each, a test using `spyGate` that asserts the gate is **never consulted** for
 `../../etc/passwd`. Count how many fail. The README claims all of them refuse
 outright.
 
-**C · Pluralise the turn-limit message.**
-`MaxTurnsError` currently says *"Stopped after 1 turns"*. Fix it, with a test.
-Small, but it's the kind of thing users notice and quietly lose confidence
-over.
+**C · Pluralise the turn-limit message.** *(Since fixed — the lesson is in how.)*
+`MaxTurnsError` said *"Stopped after 1 turns"*, and `--list` said *"1 turns"*.
+The interesting part was not the fix but the survey: the codebase had **three**
+hand-written `n === 1 ? '' : 's'` ternaries and **six** places with none. Nobody
+had decided not to pluralise — each site had been written in isolation, and
+half the authors thought of it.
 
-**D · Add `/compact`.**
-Compaction only runs when the budget demands it. Add a slash command that
-triggers it deliberately, so a user can fold history before asking something
-expensive. Where does it live so that `commands.ts` still knows nothing about
-the Agent?
+That is the shape of most cosmetic bugs. Go looking for another one in this
+repo: pick any formatting decision made inline at a call site, grep for every
+place that had to make the same decision, and count how many disagree.
+
+<details><summary>the other thing it taught</summary>
+
+`--list` aligns its columns with `padStart(3)` on the number. Fixing the word
+broke the alignment, because "turn" is a character shorter than "turns" — so
+the title column jumped left for every single-turn session. The count and its
+word have to be padded as one unit.
+
+A fix that is correct in isolation can still be wrong in place. Look at the
+output, not just the string.
+</details>
+
+**D · `/compact`.** *(Since built — read it instead.)*
+Compaction only ran when the budget demanded it, and `/compact` answered
+"unknown command". It now exists. Read `commands.ts` and `agent.ts` and answer
+three things: how does the dispatcher trigger a compaction while still knowing
+nothing about the Agent? Why does `compact()` return `null` instead of a
+`CompactionInfo` with zeroes in it? And why does the command print nothing at
+all when it succeeds?
+
+<details><summary>answers</summary>
+
+A `compact: () => Promise<CompactOutcome>` callback on `CommandContext`, like
+every other capability it has — three outcomes again, because *cancelled* and
+*nothing to fold* both mean "no compaction happened" and must not be reported
+as the same thing.
+
+`null` because a note reading `0 messages summarized, ~1200 → ~1200 tokens` is
+how a working command starts to look broken. Say "nothing to compact" instead.
+
+Nothing is printed on success because the CLI's `onCompact` renderer already
+prints the `⟳` line, exactly as it does for an automatic compaction. One event,
+one line, one place that draws it.
+</details>
 
 **E · Test the `grep` fallback on purpose.**
 `search_code` uses ripgrep when present and `grep` otherwise — so on any machine

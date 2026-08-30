@@ -1,11 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Agent, MaxTurnsError } from '../agent.js';
-import type { AgentOptions, CompactionInfo } from '../agent.js';
-import { budgetTokens, defaultPolicy, estimateTokens } from '../context.js';
-import type { ModelEvent, ModelProvider, ModelRequest } from '../types.js';
-import { allowAll } from './helpers.js';
+import { Agent, MaxTurnsError } from '../../agent/agent.js';
+import type { AgentOptions, CompactionInfo } from '../../agent/agent.js';
+import {
+  budgetTokens,
+  defaultPolicy,
+  estimateTokens,
+} from '../../agent/context.js';
+import type { ModelEvent, ModelProvider, ModelRequest } from '../../types.js';
+import { allowAll } from '../helpers.js';
 
 const MAX_CONTEXT = 6_000;
 const BUDGET = budgetTokens(defaultPolicy(MAX_CONTEXT));
@@ -205,6 +209,83 @@ test('a short conversation never triggers compaction', async () => {
 
   assert.deepEqual(seen, []);
   assert.equal(provider.summarizerCalls.length, 0);
+});
+
+test('compact() folds history that is nowhere near the budget', async () => {
+  // The whole point of the manual command: automatic compaction only ever
+  // happens at the worst moment, part-way through a turn the user is waiting
+  // on. Three short turns are far under a 6000-token window.
+  const provider = new FakeProvider((request) =>
+    isSummarizer(request) ? text('SUMMARY OF EARLIER WORK') : text('ok'),
+  );
+  const agent = makeAgent(provider);
+
+  for (const line of ['first', 'second', 'third']) await agent.send(line);
+  assert.equal(provider.summarizerCalls.length, 0, 'nothing forced it yet');
+
+  const info = await agent.compact();
+
+  assert.ok(info, 'forced compaction did nothing');
+  assert.ok(info.messagesElided > 0);
+  assert.equal(provider.summarizerCalls.length, 1);
+  assert.match(agent.snapshot().summary ?? '', /SUMMARY OF EARLIER WORK/);
+});
+
+test('compact() keeps the recent turns verbatim, exactly as the automatic path does', async () => {
+  // A manual compaction that dropped live task state would be worse than never
+  // compacting: the user asks for it *before* an expensive request.
+  const provider = new FakeProvider((request) =>
+    isSummarizer(request) ? text('SUMMARY') : text('ok'),
+  );
+  const agent = makeAgent(provider);
+
+  for (const line of ['first', 'second', 'third']) await agent.send(line);
+  await agent.compact();
+
+  const kept = agent
+    .snapshot()
+    .history.filter((message) => message.role === 'user')
+    .map((message) => message.content);
+  assert.deepEqual(kept, ['second', 'third']);
+});
+
+test('compact() reports null rather than faking a compaction', async () => {
+  const provider = new FakeProvider(() => text('ok'));
+  const agent = makeAgent(provider);
+  await agent.send('hello');
+
+  assert.equal(await agent.compact(), null);
+  assert.equal(
+    provider.summarizerCalls.length,
+    0,
+    'a hopeless compaction must not cost a model call',
+  );
+});
+
+test('compact() on an empty conversation is a no-op, not a crash', async () => {
+  const agent = makeAgent(new FakeProvider(() => text('ok')));
+
+  assert.equal(await agent.compact(), null);
+});
+
+test('a cancelled compact() leaves history untouched', async () => {
+  // Cancelling mid-summary must not bake a half-finished result in. The
+  // conversation has to be exactly as compactable afterwards as before.
+  const controller = new AbortController();
+  const provider = new FakeProvider((request) => {
+    if (isSummarizer(request)) {
+      controller.abort();
+      return text('SUMMARY');
+    }
+    return text('ok');
+  });
+  const agent = makeAgent(provider);
+
+  for (const line of ['first', 'second', 'third']) await agent.send(line);
+  const before = agent.snapshot();
+
+  assert.equal(await agent.compact(controller.signal), null);
+  assert.deepEqual(agent.snapshot(), before);
 });
 
 test('SECURITY: no request ever carries a tool result without its call', async () => {

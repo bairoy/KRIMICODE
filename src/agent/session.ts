@@ -24,8 +24,9 @@ import {
 } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { redact } from './redact.js';
-import type { Message } from './types.js';
+import { plural } from '../plural.js';
+import { redact } from '../redact.js';
+import type { Message } from '../types.js';
 
 /** Bumped when the on-disk shape changes incompatibly. */
 const CURRENT_VERSION = 1;
@@ -229,8 +230,11 @@ export function formatSessionLine(
   now: Date = new Date(),
 ): string {
   const turns = session.history.filter((m) => m.role === 'user').length;
+  // Padded as one unit rather than padding the number alone: "turn" is a
+  // character shorter than "turns", which would shift the title column.
+  const count = `${String(turns).padStart(3)} ${plural(turns, 'turn')}`;
   return (
     `${session.id}  ${describeAge(session.updatedAt, now).padEnd(10)}` +
-    `${String(turns).padStart(3)} turns  ${session.title}`
+    `${count.padEnd(9)}  ${session.title}`
   );
 }

@@ -87,6 +87,7 @@ krimicode --help
 |---|---|
 | `/help` | list the commands |
 | `/clear` | forget the conversation and start fresh |
+| `/compact` | summarize older turns now, freeing context |
 | `/model` | show the current model, or `/model <name>` to switch |
 | `/tools` | list the tools the model can call |
 | `/sessions` | saved conversations for this directory |
@@ -169,6 +170,12 @@ ones kept verbatim. You will see a line like:
 History is only ever cut at a point where a complete exchange has finished, so
 a tool result is never separated from the call that asked for it.
 
+`/compact` does the same thing on demand. Automatic compaction always arrives
+at the worst moment — part-way through a turn you are waiting on — so it is
+worth folding deliberately before asking for something expensive. Either way
+the two most recent turns are kept verbatim, so a `/compact` cannot lose what
+you are in the middle of.
+
 ## Development
 
 ```sh
@@ -205,19 +212,45 @@ Worth knowing before you rely on it:
 
 ```
 src/
-  index.ts        the terminal: input, rendering, approval prompts
-  agent.ts        the loop
-  context.ts      token budget, compaction, summarization
+  index.ts        the composition root — builds everything, owns nothing
   provider.ts     the OpenAI-compatible client
   permissions.ts  the gate
-  workspace.ts    path resolution and the workspace boundary
-  platform.ts     everything that differs on Windows
-  session.ts      saving and resuming conversations
-  exec.ts         the only place a process is spawned
   redact.ts       secret redaction
-  normalize.ts    the single road every tool result takes back
-  tools/          one file per tool
+  config.ts       environment validation
+  types.ts        the contracts every layer speaks
+
+  cli/            the terminal, and nothing else
+    repl.ts         the loop, Ctrl-C handling, session persistence
+    renderer.ts     owns every byte written to stdout during a turn
+    approve.ts      the permission prompt
+    ansi.ts         colours, screen clearing, diff rendering
+    commands.ts     slash commands
+    args.ts         CLI flags
+    paste.ts        bracketed-paste filtering
+
+  agent/
+    agent.ts        the loop
+    context.ts      token budget, compaction, summarization
+    session.ts      saving and resuming conversations
+
+  tools/          one file per tool, plus
+    define.ts       the Tool contract and dispatch
+    index.ts        the registry — what the model can call
+    normalize.ts    the single road every tool result takes back
+
+  exec/
+    exec.ts         the only place a process is spawned
+    platform.ts     everything that differs on Windows
+    workspace.ts    path resolution and the workspace boundary
+
+  tests/          mirrors the tree above
 ```
+
+One folder per layer, following the responsibility boundaries in
+`ARCHITECTURE.md` §2. Nothing imports upwards — `tools/` never reaches into
+`cli/` — and `index.ts` is the only file that knows how the layers fit
+together. A layer that is genuinely one file stays flat rather than getting a
+folder of its own.
 
 `learning/` holds a long-form walkthrough of how all of this works and why,
 written as three days of notes.

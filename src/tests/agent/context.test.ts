@@ -13,8 +13,8 @@ import {
   planCompaction,
   renderTranscript,
   shrinkToolResults,
-} from '../context.js';
-import type { Message } from '../types.js';
+} from '../../agent/context.js';
+import type { Message } from '../../types.js';
 
 const POLICY = defaultPolicy(10_000);
 

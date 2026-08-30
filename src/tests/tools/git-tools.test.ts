@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runProgram } from '../exec.js';
-import { gitDiffTool } from '../tools/git_diff.js';
-import { gitStatusTool } from '../tools/git_status.js';
-import { runTestsTool } from '../tools/run_tests.js';
-import { allowAll, denyAll, spyGate } from './helpers.js';
+import { runProgram } from '../../exec/exec.js';
+import { gitDiffTool } from '../../tools/git_diff.js';
+import { gitStatusTool } from '../../tools/git_status.js';
+import { runTestsTool } from '../../tools/run_tests.js';
+import { allowAll, denyAll, spyGate } from '../helpers.js';
 
 let repo = '';
 let bare = '';

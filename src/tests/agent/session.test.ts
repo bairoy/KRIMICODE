@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { isWindows } from '../platform.js';
-import { registerSecret } from '../redact.js';
+import { isWindows } from '../../exec/platform.js';
+import { registerSecret } from '../../redact.js';
 import {
   deriveTitle,
   describeAge,
@@ -16,9 +16,9 @@ import {
   newSessionId,
   saveSession,
   sessionsDir,
-} from '../session.js';
-import type { SavedSession } from '../session.js';
-import type { Message } from '../types.js';
+} from '../../agent/session.js';
+import type { SavedSession } from '../../agent/session.js';
+import type { Message } from '../../types.js';
 
 /** A throwaway home directory, so tests never touch the real ~/.krimicode. */
 const fakeHome = () => mkdtemp(join(tmpdir(), 'krimicode-session-'));
