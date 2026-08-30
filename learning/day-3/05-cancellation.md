@@ -90,8 +90,8 @@ The signal has to reach everything that could still be running:
 
 ```mermaid
 flowchart TD
-    CTRL(["you press Ctrl-C"]) --> IDX["index.ts<br/><b>controller.abort()</b>"]
-    IDX -->|"signal"| AG["agent.ts<br/>send(input, signal)"]
+    CTRL(["you press Ctrl-C"]) --> IDX["cli/repl.ts<br/><b>controller.abort()</b>"]
+    IDX -->|"signal"| AG["agent/agent.ts<br/>send(input, signal)"]
 
     AG -->|signal| PR["provider.stream({ …, signal })"]
     PR --> STOP1["🛑 the HTTP stream stops<br/><i>billing stops</i>"]
@@ -628,7 +628,7 @@ Two lessons, both worth keeping:
    survived.
 2. Press Ctrl-C at the `>` prompt with nothing running. It should quit. Now
    press it mid-answer. It should cancel and return to the prompt.
-3. Remove the `signal` option from `rl.question` in `index.ts`. Trigger a
+3. Remove the `signal` option from `rl.question` in `cli/repl.ts`. Trigger a
    permission prompt, press Ctrl-C, and watch it hang. Revert.
 4. Change the tool loop's cancel branch back to `break`. Run `npm test` and
    read which test fails and why. **Revert immediately.**

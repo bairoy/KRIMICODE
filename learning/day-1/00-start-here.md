@@ -11,8 +11,8 @@ Read them in order. Each file builds on the one before it.
 | `02-config-and-zod.md` | `src/config.ts` — reading and validating environment variables |
 | `03-types-and-contracts.md` | `src/types.ts` — the shapes everything agrees on |
 | `04-provider-and-streaming.md` | `src/provider.ts` — talking to the model, streaming, tool-call assembly |
-| `05-agent-loop.md` | `src/agent.ts` — the heart of the agent |
-| `06-security.md` | `src/workspace.ts`, `src/redact.ts`, `src/normalize.ts` |
+| `05-agent-loop.md` | `src/agent/agent.ts` — the heart of the agent |
+| `06-security.md` | `src/exec/workspace.ts`, `src/redact.ts`, `src/tools/normalize.ts` |
 | `07-tool-system.md` | `src/tools/` — how a tool is defined, validated, and registered |
 | `08-cli-rendering.md` | `src/index.ts` — the terminal interface |
 | `09-concepts-cheatsheet.md` | Every JS/TS concept used, in one place |
@@ -121,6 +121,12 @@ src/
     ├── index.ts      The list of tools that exist. The registry.
     └── read_file.ts  Our first real tool.
 ```
+
+> **This is the shape at the end of Day 1, and it is worth seeing flat first —
+> eleven files, every one of them findable.** The project later grew into one
+> folder per layer, and `index.ts` was split up; `learning/README.md` has the
+> map from these names to where each file lives today. Everything below still
+> describes the right code, one directory deeper.
 
 ## How the pieces talk to each other
 

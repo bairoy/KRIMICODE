@@ -29,7 +29,7 @@ The answer has two halves, and both matter.
 
 ## Half one — make the decisions pure
 
-Every place the behaviour must differ went into one file, `src/platform.ts`,
+Every place the behaviour must differ went into one file, `src/exec/platform.ts`,
 as functions that **take the platform as an argument** instead of asking the
 computer they are running on.
 
@@ -262,9 +262,9 @@ boundary. It cannot silently become an injection.
 ## Try it yourself
 
 **1 — Feel the difference a parameter makes.**
-Open `src/platform.ts` and rewrite `isInside` to read `process.platform`
+Open `src/exec/platform.ts` and rewrite `isInside` to read `process.platform`
 directly instead of taking it as an argument. Now try to keep
-`src/tests/platform.test.ts` passing. You cannot — half those tests become
+`src/tests/exec/platform.test.ts` passing. You cannot — half those tests become
 unwritable. Revert.
 
 **2 — Re-run the mutation.**

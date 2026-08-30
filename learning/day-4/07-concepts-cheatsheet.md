@@ -45,10 +45,10 @@ flowchart TD
 
 | File | What it holds |
 |---|---|
-| `src/platform.ts` | every decision that differs on Windows, as pure functions |
-| `src/session.ts` | save / load / list conversations — concrete, no interface |
-| `src/commands.ts` | the slash-command dispatcher |
-| `src/args.ts` | CLI flags (separate so `index.ts` isn't imported to test it) |
+| `src/exec/platform.ts` | every decision that differs on Windows, as pure functions |
+| `src/agent/session.ts` | save / load / list conversations — concrete, no interface |
+| `src/cli/commands.ts` | the slash-command dispatcher |
+| `src/cli/args.ts` | CLI flags (separate so `index.ts` isn't imported to test it) |
 | `src/tools/create_file.ts` | the mirror of `edit_file` |
 | `biome.json` | lint + format |
 | `.github/workflows/ci.yml` | 5 jobs across 3 operating systems |

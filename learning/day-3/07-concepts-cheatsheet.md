@@ -198,11 +198,11 @@ AbortSignal.abort()                            // an already-aborted signal
 
 ```mermaid
 flowchart TD
-    A(["Ctrl-C"]) --> B["index.ts · controller.abort()"]
-    B --> C["agent.ts · send(input, signal)"]
+    A(["Ctrl-C"]) --> B["cli/repl.ts · controller.abort()"]
+    B --> C["agent/agent.ts · send(input, signal)"]
     C --> D["provider.stream · stops the HTTP stream"]
     C --> E["tool.run · refused before the gate"]
-    E --> F["exec.ts · kills the process GROUP"]
+    E --> F["exec/exec.ts · kills the process GROUP"]
     B --> G["rl.question · closes the approval prompt"]
 ```
 

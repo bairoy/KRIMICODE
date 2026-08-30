@@ -40,15 +40,15 @@ This is the real test.
 
 - [ ] `src/config.ts`
 - [ ] `src/types.ts`
-- [ ] `src/normalize.ts`
-- [ ] `src/workspace.ts`
+- [ ] `src/tools/normalize.ts`
+- [ ] `src/exec/workspace.ts`
 - [ ] `src/redact.ts`
 - [ ] `src/tools/define.ts`
 - [ ] `src/tools/read_file.ts`
 - [ ] `src/tools/index.ts`
-- [ ] `src/agent.ts`
+- [ ] `src/agent/agent.ts`
 - [ ] `src/provider.ts`
-- [ ] `src/index.ts`
+- [ ] `src/index.ts` + `src/cli/` — the CLI, split out of it since
 
 If you get stuck on a line, that's the section to re-read.
 
@@ -124,7 +124,7 @@ call failing.
 
 ### C6 — Leak the colour
 
-In `index.ts`, delete `stdout.write('\x1b[0m')` from `end()`. Trigger an error
+In `cli/renderer.ts`, delete `stdout.write('\x1b[0m')` from `end()`. Trigger an error
 mid-reasoning. Your entire shell goes dim, permanently. Run `reset` to recover.
 
 ---
@@ -166,8 +166,10 @@ lines. Think about:
 
 ### D3 — Add a `/history` command
 
-In `index.ts`, handle a `/history` input that prints how many messages are in
-the conversation.
+In `cli/commands.ts`, handle a `/history` command that prints how many
+messages are in the conversation. (When this was written there was no
+dispatcher and it would have gone in `index.ts` — the exercise is the same, and
+the callback on `CommandContext` is now the interesting part.)
 
 You'll notice `#messages` is private. **Don't make it public.** Add a small
 read-only accessor on `Agent` instead — and think about why that's better.

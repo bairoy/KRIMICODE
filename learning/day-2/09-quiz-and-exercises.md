@@ -43,15 +43,15 @@ Answer from memory first. Answers at the bottom.
 Explain every line aloud. Tick when you can.
 
 - [ ] `src/permissions.ts`
-- [ ] `src/exec.ts`
+- [ ] `src/exec/exec.ts`
 - [ ] `src/tools/edit_file.ts`
 - [ ] `src/tools/search_code.ts`
 - [ ] `src/tools/list_files.ts`
 - [ ] `src/tools/git_status.ts`
 - [ ] `src/tools/git_diff.ts`
 - [ ] `src/tools/run_tests.ts`
-- [ ] `src/paste.ts`
-- [ ] `src/render.ts`
+- [ ] `src/cli/paste.ts`
+- [ ] `src/cli/ansi.ts`
 
 ---
 
@@ -71,7 +71,7 @@ Then watch it for real:
 
 ```bash
 npx tsx -e "
-import { runCommand } from './src/exec.ts';
+import { runCommand } from './src/exec/exec.ts';
 await runCommand('sleep 9911 & sleep 9911', { cwd: process.cwd(), timeoutMs: 1000 });
 " ; sleep 1; pgrep -f 'sleep 9911' | wc -l
 ```
@@ -116,7 +116,7 @@ the split-marker tests fail. That function is the entire chunk-boundary defence.
 
 ### C6 — Restore the unreadable diff
 
-In `render.ts`, replace the head/tail trimming with `head = 0; tail = 0;`. Ask
+In `ansi.ts`, replace the head/tail trimming with `head = 0; tail = 0;`. Ask
 the agent to edit a line sitting under a long comment. You've reproduced the
 original bug.
 

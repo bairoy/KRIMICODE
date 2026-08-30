@@ -9,7 +9,7 @@ Read Day 1 first if you haven't. These notes assume it.
 |---|---|
 | `00-start-here.md` | What changed and why. Read this first. |
 | `01-permission-gate.md` | `src/permissions.ts` — asking the human |
-| `02-running-processes.md` | `src/exec.ts` — spawning, killing, and not getting hacked |
+| `02-running-processes.md` | `src/exec/exec.ts` — spawning, killing, and not getting hacked |
 | `03-edit-file.md` | `src/tools/edit_file.ts` — exact string replacement |
 | `04-discovery-tools.md` | `list_files`, `search_code`, and command injection |
 | `05-git-and-test-tools.md` | `git_status`, `git_diff`, `run_tests` |

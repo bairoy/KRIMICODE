@@ -1,4 +1,4 @@
-# 05 — The Agent Loop (`src/agent.ts`)
+# 05 — The Agent Loop (`src/agent/agent.ts`)
 
 This is the heart of the program. Everything else exists to serve this file.
 

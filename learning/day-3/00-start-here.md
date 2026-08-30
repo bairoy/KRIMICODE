@@ -49,7 +49,7 @@ a command was running, it keeps running. You have no brake pedal.
 
 | Problem | Fix | Where |
 |---|---|---|
-| History grows forever | **Compaction** — fold old turns into a summary | `src/context.ts` |
+| History grows forever | **Compaction** — fold old turns into a summary | `src/agent/context.ts` |
 | No way to stop | **Cancellation** — one signal, all the way down | everywhere |
 
 ```mermaid
@@ -114,7 +114,7 @@ two different costumes.
 ~3,000 lines of source
 ```
 
-New file this time: **`src/context.ts`**. Changed files: `agent.ts` (a real
+New file this time: **`src/agent/context.ts`**. Changed files: `agent.ts` (a real
 restructure), `exec.ts`, `provider.ts`, `config.ts`, `index.ts`,
 `tools/define.ts`, and five tools that spawn processes.
 

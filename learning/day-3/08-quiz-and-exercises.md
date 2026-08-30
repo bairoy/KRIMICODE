@@ -57,18 +57,18 @@ Answer from memory first. Answers at the bottom.
 
 Explain every line aloud. Tick when you can.
 
-- [ ] `src/context.ts` — `estimateTokens`
-- [ ] `src/context.ts` — `planCompaction`
-- [ ] `src/context.ts` — `shrinkToolResults`
-- [ ] `src/context.ts` — `composeSystem`
-- [ ] `src/context.ts` — `renderTranscript` / `renderMessage`
-- [ ] `src/context.ts` — `buildSummaryRequest`
-- [ ] `src/context.ts` — `mechanicalDigest`
-- [ ] `src/agent.ts` — `send`
-- [ ] `src/agent.ts` — `#compactIfNeeded`
-- [ ] `src/agent.ts` — `#summarize`
-- [ ] `src/exec.ts` — `terminate` / `onAbort` / `finish`
-- [ ] `src/index.ts` — the SIGINT handler and the REPL `finally`
+- [ ] `src/agent/context.ts` — `estimateTokens`
+- [ ] `src/agent/context.ts` — `planCompaction`
+- [ ] `src/agent/context.ts` — `shrinkToolResults`
+- [ ] `src/agent/context.ts` — `composeSystem`
+- [ ] `src/agent/context.ts` — `renderTranscript` / `renderMessage`
+- [ ] `src/agent/context.ts` — `buildSummaryRequest`
+- [ ] `src/agent/context.ts` — `mechanicalDigest`
+- [ ] `src/agent/agent.ts` — `send`
+- [ ] `src/agent/agent.ts` — `#compactIfNeeded`
+- [ ] `src/agent/agent.ts` — `#summarize`
+- [ ] `src/exec/exec.ts` — `terminate` / `onAbort` / `finish`
+- [ ] `src/cli/repl.ts` — the SIGINT handler and the REPL cleanup
 
 ---
 
@@ -125,7 +125,7 @@ Then think: which real-world conversation would this under-count worst?
 
 ### C6 — Freeze instead of cancel
 
-Remove the `{ signal }` option from `rl.question` in `index.ts`. Run the agent,
+Remove the `{ signal }` option from `rl.question` in `cli/repl.ts`. Run the agent,
 trigger a permission prompt, press Ctrl-C. Nothing happens — the program is
 stuck. Ctrl-\ to escape. Revert.
 
@@ -136,7 +136,7 @@ In `exec.ts`, make `onAbort` call `child.kill('SIGTERM')` instead of
 
 ```bash
 npx tsx -e "
-import { runCommand } from './src/exec.ts';
+import { runCommand } from './src/exec/exec.ts';
 const c = new AbortController();
 setTimeout(() => c.abort(), 500);
 await runCommand('sleep 9912 & sleep 9912', { cwd: process.cwd(), timeoutMs: 60000, signal: c.signal });

@@ -34,7 +34,7 @@ CLAUDE.md is blunt about it:
 > there's a second real implementation that needs it. One concrete
 > implementation first, always.*
 
-So sessions shipped as `src/session.ts`: a handful of plain functions. No
+So sessions shipped as `src/agent/session.ts`: a handful of plain functions. No
 interface, no class, no `SessionStore`, no dependency injection.
 
 ```ts
