@@ -396,6 +396,31 @@ async function main(): Promise<void> {
         printBanner();
       }
     },
+    /**
+     * Summarizing is a model call, so this runs through the same machinery as
+     * a turn: spinner, an `active` controller so Ctrl-C interrupts it, and a
+     * save afterwards — the summary is part of the session, and losing it would
+     * mean paying for the same compaction again on resume.
+     */
+    compact: async () => {
+      render.waiting();
+      const controller = new AbortController();
+      active = controller;
+      try {
+        const info = await agent.compact(controller.signal);
+        // Cancelling is checked first: an aborted compaction also returns null,
+        // and reporting that as "nothing to compact" would be a lie about a
+        // conversation that may well have plenty to fold.
+        if (controller.signal.aborted) return 'cancelled';
+        return info === null ? 'nothing-to-do' : 'compacted';
+      } finally {
+        const cancelled = controller.signal.aborted;
+        active = null;
+        render.end();
+        if (cancelled) stdout.write(`${DIM}cancelled${RESET}\n\n`);
+        await persist();
+      }
+    },
     listTools: () =>
       toolSpecs().map((spec) => ({
         name: spec.name,
