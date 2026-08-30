@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { runProgram } from '../exec.js';
-import { resolveInWorkspace, WorkspaceError } from '../workspace.js';
+import { runProgram } from '../exec/exec.js';
+import { resolveInWorkspace, WorkspaceError } from '../exec/workspace.js';
 import { defineTool } from './define.js';
 
 const InputSchema = z.object({

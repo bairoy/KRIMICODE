@@ -5,8 +5,9 @@ import {
   isSensitivePath,
   resolveInWorkspace,
   WorkspaceError,
-} from '../workspace.js';
+} from '../exec/workspace.js';
 import { defineTool } from './define.js';
+import { counted } from '../plural.js';
 
 const InputSchema = z.object({
   path: z
@@ -285,9 +286,9 @@ export const editFileTool = defineTool({
     return {
       success: true,
       content:
-        `Replaced ${occurrences} occurrence${occurrences === 1 ? '' : 's'} in ` +
+        `Replaced ${counted(occurrences, 'occurrence')} in ` +
         `${input.path}, first at line ${line}. ` +
-        `File went from ${content.length} to ${updated.length} characters.`,
+        `File went from ${content.length} to ${counted(updated.length, 'character')}.`,
     };
   },
 });

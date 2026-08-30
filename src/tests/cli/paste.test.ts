@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createPasteFilter } from '../paste.js';
+import { createPasteFilter } from '../../cli/paste.js';
 
 const START = '\x1b[200~';
 const END = '\x1b[201~';

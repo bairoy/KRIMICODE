@@ -6,8 +6,9 @@ import {
   isSensitivePath,
   resolveInWorkspace,
   WorkspaceError,
-} from '../workspace.js';
+} from '../exec/workspace.js';
 import { defineTool } from './define.js';
+import { counted } from '../plural.js';
 
 const InputSchema = z.object({
   path: z
@@ -156,7 +157,9 @@ export const createFileTool = defineTool({
     const lines = input.content === '' ? 0 : input.content.split('\n').length;
     return {
       success: true,
-      content: `Created ${input.path} — ${input.content.length} characters, ${lines} lines.`,
+      content:
+        `Created ${input.path} — ${counted(input.content.length, 'character')}, ` +
+        `${counted(lines, 'line')}.`,
     };
   },
 });

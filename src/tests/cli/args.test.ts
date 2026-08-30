@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { parseCliArgs, USAGE } from '../args.js';
+import { parseCliArgs, USAGE } from '../../cli/args.js';
 
 test('no arguments means a fresh interactive session', () => {
   const args = parseCliArgs([]);

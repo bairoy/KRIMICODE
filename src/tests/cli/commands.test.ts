@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { commandNames, handleCommand } from '../commands.js';
-import type { CommandContext } from '../commands.js';
+import { commandNames, handleCommand } from '../../cli/commands.js';
+import type { CommandContext } from '../../cli/commands.js';
 
 /** A context that records everything the commands did, with no terminal. */
 function fakeContext(overrides: Partial<CommandContext> = {}) {

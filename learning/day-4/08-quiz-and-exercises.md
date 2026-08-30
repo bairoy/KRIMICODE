@@ -295,10 +295,27 @@ each, a test using `spyGate` that asserts the gate is **never consulted** for
 `../../etc/passwd`. Count how many fail. The README claims all of them refuse
 outright.
 
-**C · Pluralise the turn-limit message.**
-`MaxTurnsError` currently says *"Stopped after 1 turns"*. Fix it, with a test.
-Small, but it's the kind of thing users notice and quietly lose confidence
-over.
+**C · Pluralise the turn-limit message.** *(Since fixed — the lesson is in how.)*
+`MaxTurnsError` said *"Stopped after 1 turns"*, and `--list` said *"1 turns"*.
+The interesting part was not the fix but the survey: the codebase had **three**
+hand-written `n === 1 ? '' : 's'` ternaries and **six** places with none. Nobody
+had decided not to pluralise — each site had been written in isolation, and
+half the authors thought of it.
+
+That is the shape of most cosmetic bugs. Go looking for another one in this
+repo: pick any formatting decision made inline at a call site, grep for every
+place that had to make the same decision, and count how many disagree.
+
+<details><summary>the other thing it taught</summary>
+
+`--list` aligns its columns with `padStart(3)` on the number. Fixing the word
+broke the alignment, because "turn" is a character shorter than "turns" — so
+the title column jumped left for every single-turn session. The count and its
+word have to be padded as one unit.
+
+A fix that is correct in isolation can still be wrong in place. Look at the
+output, not just the string.
+</details>
 
 **D · `/compact`.** *(Since built — read it instead.)*
 Compaction only ran when the budget demanded it, and `/compact` answered

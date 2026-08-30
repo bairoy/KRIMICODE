@@ -4,7 +4,7 @@ import {
   isSensitivePath,
   resolveInWorkspace,
   WorkspaceError,
-} from '../workspace.js';
+} from '../exec/workspace.js';
 import { defineTool } from './define.js';
 
 const InputSchema = z.object({
