@@ -2,12 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getEventListeners } from 'node:events';
 
-import { runCommand } from '../exec.js';
-import { isWindows } from '../platform.js';
-import { defineTool } from '../tools/define.js';
-import type { ToolContext } from '../tools/define.js';
+import { runCommand } from '../../exec/exec.js';
+import { isWindows } from '../../exec/platform.js';
+import { defineTool } from '../../tools/define.js';
+import type { ToolContext } from '../../tools/define.js';
 import { z } from 'zod';
-import { countLiveMatching, spyGate } from './helpers.js';
+import { countLiveMatching, spyGate } from '../helpers.js';
 
 const cwd = process.cwd();
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

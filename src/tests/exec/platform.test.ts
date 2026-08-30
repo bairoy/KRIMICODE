@@ -7,7 +7,7 @@ import {
   shellInvocation,
   shimInvocation,
   taskkillArgs,
-} from '../platform.js';
+} from '../../exec/platform.js';
 
 /**
  * These functions take `platform` as a parameter precisely so the Windows

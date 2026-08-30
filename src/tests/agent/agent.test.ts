@@ -1,11 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Agent, MaxTurnsError } from '../agent.js';
-import type { AgentOptions, CompactionInfo } from '../agent.js';
-import { budgetTokens, defaultPolicy, estimateTokens } from '../context.js';
-import type { ModelEvent, ModelProvider, ModelRequest } from '../types.js';
-import { allowAll } from './helpers.js';
+import { Agent, MaxTurnsError } from '../../agent/agent.js';
+import type { AgentOptions, CompactionInfo } from '../../agent/agent.js';
+import {
+  budgetTokens,
+  defaultPolicy,
+  estimateTokens,
+} from '../../agent/context.js';
+import type { ModelEvent, ModelProvider, ModelRequest } from '../../types.js';
+import { allowAll } from '../helpers.js';
 
 const MAX_CONTEXT = 6_000;
 const BUDGET = budgetTokens(defaultPolicy(MAX_CONTEXT));

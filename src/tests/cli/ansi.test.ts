@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CLEAR_SCREEN, renderDiff } from '../render.js';
+import { CLEAR_SCREEN, renderDiff } from '../../cli/ansi.js';
 
 /** Strip ANSI so assertions read clearly. */
 const plain = (text: string): string =>

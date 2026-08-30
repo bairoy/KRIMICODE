@@ -1,8 +1,9 @@
 import { z } from 'zod';
-import { runProgram } from '../exec.js';
-import { isWindows } from '../platform.js';
-import { resolveInWorkspace, WorkspaceError } from '../workspace.js';
+import { runProgram } from '../exec/exec.js';
+import { isWindows } from '../exec/platform.js';
+import { resolveInWorkspace, WorkspaceError } from '../exec/workspace.js';
 import { defineTool } from './define.js';
+import { counted } from '../plural.js';
 
 const InputSchema = z.object({
   pattern: z
@@ -188,7 +189,7 @@ export const searchCodeTool = defineTool({
 
     return {
       success: true,
-      content: `${shown.length} match${shown.length === 1 ? '' : 'es'} (${program}):\n${shown.join('\n')}${note}`,
+      content: `${counted(shown.length, 'match', 'matches')} (${program}):\n${shown.join('\n')}${note}`,
     };
   },
 });

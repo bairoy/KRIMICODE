@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { runCommand } from '../exec.js';
-import { isWindows } from '../platform.js';
-import { countLiveMatching } from './helpers.js';
+import { runCommand } from '../../exec/exec.js';
+import { isWindows } from '../../exec/platform.js';
+import { countLiveMatching } from '../helpers.js';
 
 const cwd = process.cwd();
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

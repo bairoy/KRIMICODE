@@ -10,10 +10,11 @@ import {
   shrinkToolResults,
   type CompactionPolicy,
 } from './context.js';
-import { normalizeToolResult } from './normalize.js';
-import type { PermissionGate } from './permissions.js';
-import { getTool, toolSpecs } from './tools/index.js';
-import type { Message, ModelProvider, ToolCall, ToolResult } from './types.js';
+import { counted } from '../plural.js';
+import { normalizeToolResult } from '../tools/normalize.js';
+import type { PermissionGate } from '../permissions.js';
+import { getTool, toolSpecs } from '../tools/index.js';
+import type { Message, ModelProvider, ToolCall, ToolResult } from '../types.js';
 
 /** Runaway-loop guard: a model that keeps calling tools must still terminate. */
 const MAX_TURNS = 30;
@@ -71,7 +72,7 @@ export class MaxTurnsError extends Error {
   readonly turns: number;
 
   constructor(turns: number) {
-    super(`Stopped after ${turns} turns without a final answer.`);
+    super(`Stopped after ${counted(turns, 'turn')} without a final answer.`);
     this.name = 'MaxTurnsError';
     this.turns = turns;
   }

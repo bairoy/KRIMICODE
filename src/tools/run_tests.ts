@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { runShim } from '../exec.js';
+import { runShim } from '../exec/exec.js';
 import { defineTool } from './define.js';
 
 const InputSchema = z.object({

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { runCommand } from '../exec.js';
+import { runCommand } from '../exec/exec.js';
 import { defineTool } from './define.js';
 
 const InputSchema = z.object({

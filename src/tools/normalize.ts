@@ -1,5 +1,5 @@
-import { redact } from './redact.js';
-import type { ToolResult } from './types.js';
+import { redact } from '../redact.js';
+import type { ToolResult } from '../types.js';
 
 /**
  * Output cap. Chosen so a single runaway tool result cannot dominate the

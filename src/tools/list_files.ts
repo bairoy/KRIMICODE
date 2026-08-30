@@ -2,8 +2,9 @@ import type { Dirent } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { z } from 'zod';
-import { resolveInWorkspace, WorkspaceError } from '../workspace.js';
+import { resolveInWorkspace, WorkspaceError } from '../exec/workspace.js';
 import { defineTool } from './define.js';
+import { counted } from '../plural.js';
 
 const InputSchema = z.object({
   path: z
@@ -137,7 +138,7 @@ export const listFilesTool = defineTool({
 
     return {
       success: true,
-      content: `${entries.length} entries in ${target}:\n${entries.join('\n')}${note}`,
+      content: `${counted(entries.length, 'entry', 'entries')} in ${target}:\n${entries.join('\n')}${note}`,
     };
   },
 });

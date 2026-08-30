@@ -1,4 +1,4 @@
-import type { Message } from './types.js';
+import type { Message } from '../types.js';
 
 /**
  * The context engine (ARCHITECTURE §7): decides what the model sees when the
