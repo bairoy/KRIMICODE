@@ -78,7 +78,10 @@ async function walk(
       // Windows, which would describe the same file two different ways
       // depending on who ran the agent — and this listing is what the model
       // reads before choosing a path to pass to read_file or edit_file.
-      const shown = toPosixPath(relative(root, full) || entry.name);
+      const shown = toPosixPath(
+        relative(root, full) || entry.name,
+        process.platform,
+      );
 
       if (entry.isDirectory()) {
         if (SKIP.has(entry.name)) {

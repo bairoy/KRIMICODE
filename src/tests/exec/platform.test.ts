@@ -20,7 +20,7 @@ import {
 // --- shellInvocation --------------------------------------------------------
 
 test('a shell command runs under /bin/sh on POSIX', () => {
-  const invocation = shellInvocation('echo hi | wc -l', 'darwin');
+  const invocation = shellInvocation('echo hi | wc -l', 'darwin', undefined);
 
   assert.equal(invocation.file, '/bin/sh');
   assert.deepEqual(invocation.args, ['-c', 'echo hi | wc -l']);
@@ -50,10 +50,32 @@ test('cmd.exe is the fallback when ComSpec is unset', () => {
   assert.equal(invocation.file, 'cmd.exe');
 });
 
+test('REGRESSION: the real environment cannot reach these decisions', () => {
+  // `comSpec` used to be `= process.env['ComSpec']`. An explicit `undefined`
+  // triggers a default rather than overriding it, so the test above read the
+  // real environment: unset on macOS and Linux, set to
+  // C:\Windows\system32\cmd.exe on Windows. It passed on every machine it was
+  // written on and failed on the only platform it was about.
+  //
+  // Setting the variable here would have turned that failure red on a Mac.
+  const saved = process.env['ComSpec'];
+  process.env['ComSpec'] = 'C:\\Windows\\system32\\cmd.exe';
+  try {
+    assert.equal(shellInvocation('dir', 'win32', undefined).file, 'cmd.exe');
+    assert.equal(
+      shimInvocation('npm', ['test'], 'win32', undefined).file,
+      'cmd.exe',
+    );
+  } finally {
+    if (saved === undefined) delete process.env['ComSpec'];
+    else process.env['ComSpec'] = saved;
+  }
+});
+
 // --- shimInvocation ---------------------------------------------------------
 
 test('a shim is spawned directly on POSIX', () => {
-  const invocation = shimInvocation('npm', ['test'], 'linux');
+  const invocation = shimInvocation('npm', ['test'], 'linux', undefined);
 
   assert.equal(invocation.file, 'npm');
   assert.deepEqual(invocation.args, ['test']);
@@ -95,7 +117,12 @@ test('a shim refuses an argument containing a space', () => {
 test('shim argument checks do not fire on POSIX', () => {
   // There is no shell involved there, so nothing needs escaping and a legal
   // argument must not be rejected for the sake of the other platform.
-  const invocation = shimInvocation('npm', ['run build & echo'], 'darwin');
+  const invocation = shimInvocation(
+    'npm',
+    ['run build & echo'],
+    'darwin',
+    undefined,
+  );
 
   assert.deepEqual(invocation.args, ['run build & echo']);
 });

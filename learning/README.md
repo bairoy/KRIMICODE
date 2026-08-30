@@ -188,3 +188,11 @@ the layer folders above, a `/compact` command (compaction used to run only when
 the budget forced it), and a shared `plural.ts` after `--list` was caught
 reporting "1 turns" — three hand-written plural ternaries and six places with
 none.
+
+Then CI went red again, in three unrelated ways, and each one is worth knowing:
+
+| Job | Cause |
+|---|---|
+| ubuntu · node 20.12 | `node --test` only expands globs from Node 22. The pattern arrived as a literal filename and matched nothing. Tests are now enumerated by [`scripts/run-tests.mjs`](../scripts/run-tests.mjs) rather than by a glob. |
+| windows | `list_files` reported `src\a.ts` there and `src/a.ts` everywhere else — two names for one file, in output the model hands straight back as a path. |
+| windows | A defaulted parameter that read `process.env.ComSpec`. Written up in [day-4/02](day-4/02-another-machine.md#where-this-technique-has-a-hole) — it is the technique that chapter teaches, failing in the one way it can. |
