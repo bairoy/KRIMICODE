@@ -1,6 +1,6 @@
 # KRIMICODE — Learning Notes
 
-Three days of notes explaining **every line of code in this project**, in plain
+Four days of notes explaining **every line of code in this project**, in plain
 language, with diagrams.
 
 Read the days in order. Inside a day, read the files in order.
@@ -36,13 +36,14 @@ flowchart TD
 
 ---
 
-## The three days
+## The four days
 
 | Day | Question it answers | Files |
 |---|---|---|
 | **[Day 1](day-1/00-start-here.md)** | How does an agent work? | 11 |
 | **[Day 2](day-2/00-start-here.md)** | What happens when it goes wrong? | 10 |
 | **[Day 3](day-3/00-start-here.md)** | What happens when it keeps working — for a long time? | 9 |
+| **[Day 4](day-4/00-start-here.md)** | What separates working code from a product? | 9 |
 
 ### Day 1 — the spine
 
@@ -60,9 +61,14 @@ the test suite.
 The context problem · counting tokens · **where to cut** · writing the summary ·
 **cancellation** · testing what you cannot see.
 
+### Day 4 — making it real
+
+Lint and CI · Windows on a Mac · saving conversations · slash commands and the
+Ctrl-C hang · **the eight bugs 308 tests could not see** · the day CI went red.
+
 ---
 
-## If you remember only ten things
+## If you remember only twelve things
 
 1. **The agent is a loop, not a pipeline.** The model decides how many times it
    goes round. We just keep it turning safely.
@@ -98,6 +104,13 @@ The context problem · counting tokens · **where to cut** · writing the summar
 10. **A test you have never seen fail is a test you should not trust.** Put the
     bug back, watch it go red, then revert.
 
+11. ⭐ **Green tests mean the code does what you told it to.** Only using the
+    software tells you whether you told it the right things. Every bug in Day 4
+    was found by a person at a prompt, none by 308 passing tests.
+
+12. **Most real bugs are two right decisions meeting.** Redaction is correct.
+    Exact-match editing is correct. Together they deadlocked.
+
 ---
 
 ## How to use these notes
@@ -124,9 +137,12 @@ open a file and press `Cmd+Shift+V`.
 ## The state of the project
 
 ```
-8 tools · 206 tests · ~3,000 lines of source
+9 tools · 308 tests · ~3,700 lines of source
+lint · CI on Linux, macOS and Windows · installable · sessions resume
 ```
 
-Known gaps, honestly listed: no lint or formatter, no CI, `MAX_TURNS` throws a
-bare error, and the "swap to any OpenAI-compatible backend" promise is designed
-for but not yet tested against a second provider.
+Known gaps, honestly listed: `precheck` runs before the permission gate and its
+"must not mutate" rule is a comment rather than something CI enforces; the
+other read tools have not been audited for the prompt-before-boundary-check bug
+that `edit_file` had; and permission approvals are still per-session with no
+policy file.
