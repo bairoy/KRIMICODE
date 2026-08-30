@@ -7,6 +7,7 @@ import {
   shellInvocation,
   shimInvocation,
   taskkillArgs,
+  toPosixPath,
 } from '../../exec/platform.js';
 
 /**
@@ -156,6 +157,22 @@ test('a Windows sibling sharing the root prefix is still outside', () => {
     isInside('C:\\work\\proj-evil', 'C:\\work\\proj', 'win32'),
     false,
   );
+});
+
+// --- toPosixPath ------------------------------------------------------------
+
+test('Windows paths are reported with forward slashes', () => {
+  // The listing goes into model context and comes back as a path argument.
+  // Reporting `src\a.ts` on one platform and `src/a.ts` on another describes
+  // the same file two ways for no benefit — Windows accepts both.
+  assert.equal(toPosixPath('src\\deep\\b.ts', 'win32'), 'src/deep/b.ts');
+});
+
+test('POSIX paths are left exactly alone', () => {
+  // A backslash is illegal in a Windows filename but perfectly legal in a
+  // POSIX one, so rewriting unconditionally would corrupt a real file name.
+  assert.equal(toPosixPath('src/a.ts', 'linux'), 'src/a.ts');
+  assert.equal(toPosixPath('odd\\name.ts', 'linux'), 'odd\\name.ts');
 });
 
 // --- misc -------------------------------------------------------------------

@@ -112,6 +112,24 @@ export function shimInvocation(
  * capital I to a dotless one under a Turkish locale, which would make the
  * comparison depend on the machine's language settings.
  */
+/**
+ * A path with forward slashes, whatever the platform produced.
+ *
+ * For paths that go into model context. Windows accepts `/` everywhere, so a
+ * tool that reports `src/a.ts` on every platform describes each file exactly
+ * one way — and the model hands that string straight back as an argument.
+ *
+ * Only rewritten on Windows: a backslash is illegal in a Windows filename but
+ * perfectly legal in a POSIX one, so doing this unconditionally would corrupt
+ * a file genuinely called `odd\name.ts`.
+ */
+export function toPosixPath(
+  path: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  return isWindows(platform) ? path.replaceAll('\\', '/') : path;
+}
+
 export function isInside(
   child: string,
   root: string,
