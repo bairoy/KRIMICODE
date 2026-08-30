@@ -1,6 +1,6 @@
 # 06 — Security Boundaries
 
-Covers `src/workspace.ts`, `src/redact.ts`, and `src/normalize.ts`.
+Covers `src/exec/workspace.ts`, `src/redact.ts`, and `src/tools/normalize.ts`.
 
 ---
 
@@ -22,7 +22,7 @@ Three specific dangers on Day 1:
 
 ---
 
-# Part 1 — `src/workspace.ts`
+# Part 1 — `src/exec/workspace.ts`
 
 ## The concept: path traversal
 
@@ -444,7 +444,7 @@ without learning its value.
 
 ---
 
-# Part 3 — `src/normalize.ts`
+# Part 3 — `src/tools/normalize.ts`
 
 ## The concept: the context window
 

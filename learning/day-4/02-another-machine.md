@@ -29,7 +29,7 @@ The answer has two halves, and both matter.
 
 ## Half one — make the decisions pure
 
-Every place the behaviour must differ went into one file, `src/platform.ts`,
+Every place the behaviour must differ went into one file, `src/exec/platform.ts`,
 as functions that **take the platform as an argument** instead of asking the
 computer they are running on.
 
@@ -74,6 +74,77 @@ decision.
 
 > ⭐ **Take the environment as a parameter, not as a fact. A function that asks
 > the world what it is can only be tested in one world.**
+
+### Where this technique has a hole
+
+Months later, CI on `windows-latest` went red on exactly one test — in the file
+whose entire purpose is being checkable from a Mac.
+
+```
+not ok 174 - cmd.exe is the fallback when ComSpec is unset
+  + actual   'C:\Windows\system32\cmd.exe'
+  - expected 'cmd.exe'
+```
+
+`shellInvocation` takes a third argument: which shell binary to use. Windows
+names it in the `ComSpec` environment variable, and the signature looked
+perfectly injected:
+
+```ts
+export function shellInvocation(
+  command: string,
+  platform: NodeJS.Platform,
+  comSpec: string | undefined = process.env['ComSpec'],   // ← the hole
+): Invocation
+```
+
+The test passed the argument explicitly, which is the whole discipline of this
+chapter:
+
+```ts
+const invocation = shellInvocation('dir', 'win32', undefined);
+assert.equal(invocation.file, 'cmd.exe');
+```
+
+**That `undefined` never arrives.** In JavaScript, passing `undefined` to a
+parameter with a default *triggers* the default rather than overriding it. Only
+omitting the argument and passing `undefined` are the same thing — so there is
+no way to say "no ComSpec" at all. The function read the real environment every
+time:
+
+| Machine | `process.env.ComSpec` | `invocation.file` | |
+|---|---|---|---|
+| macOS, Linux | unset | `'cmd.exe'` | ✅ green |
+| Windows | `C:\Windows\system32\cmd.exe` | that | ❌ red |
+
+Read the test's name again: *"cmd.exe is the fallback when ComSpec is unset"*.
+It could not unset ComSpec. It passed on every machine it was ever written on,
+and failed on the one platform it was written about.
+
+The fix is to have no default at all — the parameter becomes required, and the
+environment is read once at the edge, in `exec.ts`:
+
+```ts
+shellInvocation(command, process.platform, process.env['ComSpec'])
+```
+
+Two things worth noticing about what happened next. The typechecker immediately
+found **three more** call sites that had been quietly relying on that default —
+harmless ones, but nobody had known they were there. And the new guard test
+turns the whole thing red on a Mac:
+
+```ts
+process.env['ComSpec'] = 'C:\\Windows\\system32\\cmd.exe';
+assert.equal(shellInvocation('dir', 'win32', undefined).file, 'cmd.exe');
+```
+
+> ⭐ **A default value is not an injection point.** `= process.env.X` in a
+> signature looks like the parameter version and behaves like the hardcoded
+> version. If a seam is meant to keep the world out, it has to go all the way
+> through — every input arrives from the caller, or the technique is decoration.
+
+And note what actually caught it. Not the pure functions — they were the thing
+that was broken. It was the second half of this chapter.
 
 ---
 
@@ -244,34 +315,51 @@ boundary. It cannot silently become an injection.
 1. **Take the platform as a parameter.** It turns unreachable branches into
    ordinary testable code.
 
-2. **Pure functions + CI on the real OS.** Neither alone is enough; together
-   they are honest.
+2. ⭐ **A default value is not an injection point.** `= process.env.X` reads the
+   world anyway: passing `undefined` triggers the default instead of overriding
+   it. Every input arrives from the caller, or the seam leaks.
 
-3. **`detached: true` means different things on different systems.** Read the
+3. **Pure functions + CI on the real OS.** Neither alone is enough; together
+   they are honest — and here it was CI that caught the pure functions being
+   wrong.
+
+4. **`detached: true` means different things on different systems.** Read the
    docs for the platform you cannot run.
 
-4. **Case-insensitive filesystems break string-comparison boundaries.** This is
+5. **Case-insensitive filesystems break string-comparison boundaries.** This is
    a security bug, not a cosmetic one.
 
-5. **`toLowerCase`, never `toLocaleLowerCase`, for security comparisons.**
+6. **`toLowerCase`, never `toLocaleLowerCase`, for security comparisons.**
 
-6. **If you must bring back a shell, guard it so misuse throws.**
+7. **If you must bring back a shell, guard it so misuse throws.**
 
 ---
 
 ## Try it yourself
 
 **1 — Feel the difference a parameter makes.**
-Open `src/platform.ts` and rewrite `isInside` to read `process.platform`
+Open `src/exec/platform.ts` and rewrite `isInside` to read `process.platform`
 directly instead of taking it as an argument. Now try to keep
-`src/tests/platform.test.ts` passing. You cannot — half those tests become
+`src/tests/exec/platform.test.ts` passing. You cannot — half those tests become
 unwritable. Revert.
 
 **2 — Re-run the mutation.**
 Change `c.startsWith(r.endsWith(sep) ? r : r + sep)` to `c.startsWith(r)` and
 run `npm test`. Count the failures. Note which ones are from Day 1. Revert.
 
-**3 — Try to smuggle a command.**
+**3 — Watch a default swallow an argument.**
+
+```js
+const f = (x = 'DEFAULT') => x;
+console.log(f(undefined));   // 'DEFAULT', not undefined
+console.log(f(null));        // null
+```
+
+Two minutes, no project needed. Then open `src/exec/platform.ts` and put
+`= process.env['ComSpec']` back on `shellInvocation`. Run `npm test` — one test
+goes red **on your Mac**, which is the whole point of the guard. Revert.
+
+**4 — Try to smuggle a command.**
 In a Node REPL, call
 `shimInvocation('npm', ['test && whoami'], 'win32', 'cmd.exe')`.
 Watch it throw. That is the guard doing its job.

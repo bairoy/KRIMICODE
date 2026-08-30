@@ -25,7 +25,7 @@ guaranteed stable between git versions**.
 
 ```
 ## main...origin/main [ahead 1]
- M src/agent.ts
+ M src/agent/agent.ts
 ?? notes.txt
 ```
 

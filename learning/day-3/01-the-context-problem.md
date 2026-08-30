@@ -239,7 +239,7 @@ when unsure, **guess small**.
 
 ## Try it yourself
 
-1. Open `src/context.ts` and find `defaultPolicy`. Work out `budgetTokens` by
+1. Open `src/agent/context.ts` and find `defaultPolicy`. Work out `budgetTokens` by
    hand for `maxTokens` of 8,000 / 128,000 / 1,000,000. Notice the clamps
    biting at both ends.
 2. In `.env`, set `MAX_CONTEXT_TOKENS=4000`. Run the agent and ask two or three

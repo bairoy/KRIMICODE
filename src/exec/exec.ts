@@ -244,7 +244,13 @@ export function runCommand(
   command: string,
   options: RunCommandOptions,
 ): Promise<CommandResult> {
-  return spawnAndCollect(shellInvocation(command, process.platform), options);
+  // ComSpec is read here, at the edge, rather than defaulted inside
+  // platform.ts — that keeps every decision in that file a pure function of
+  // its arguments, and therefore checkable from any machine.
+  return spawnAndCollect(
+    shellInvocation(command, process.platform, process.env['ComSpec']),
+    options,
+  );
 }
 
 /**
@@ -279,5 +285,8 @@ export function runShim(
   args: readonly string[],
   options: RunCommandOptions,
 ): Promise<CommandResult> {
-  return spawnAndCollect(shimInvocation(file, args, process.platform), options);
+  return spawnAndCollect(
+    shimInvocation(file, args, process.platform, process.env['ComSpec']),
+    options,
+  );
 }

@@ -290,7 +290,7 @@ Keeping one turn keeps only the message you just typed. But conversations
 reference backwards constantly:
 
 ```
-you:  "read src/agent.ts"
+you:  "read src/agent/agent.ts"
 agent: (reads it, explains it)
 you:  "now add a comment to that function"
 ```

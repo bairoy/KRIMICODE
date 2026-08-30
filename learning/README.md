@@ -11,10 +11,10 @@ Read the days in order. Inside a day, read the files in order.
 
 ```mermaid
 flowchart TD
-    YOU(["you type a question"]) --> IDX["index.ts<br/>terminal, colours, Ctrl-C"]
-    IDX --> AG["agent.ts<br/><b>THE LOOP</b>"]
+    YOU(["you type a question"]) --> IDX["cli/repl.ts<br/>terminal, Ctrl-C, sessions"]
+    IDX --> AG["agent/agent.ts<br/><b>THE LOOP</b>"]
 
-    AG --> CTX["context.ts<br/>am I over budget?<br/>summarize old turns"]
+    AG --> CTX["agent/context.ts<br/>am I over budget?<br/>summarize old turns"]
     CTX --> AG
 
     AG <--> PROV["provider.ts<br/>streaming, tool-call assembly"]
@@ -24,15 +24,50 @@ flowchart TD
     DEF --> GATE{"permissions.ts<br/>ask the human"}
     GATE -->|denied| NORM
     GATE -->|approved| TOOL["the tool itself<br/>read_file · edit_file · run_command …"]
-    TOOL --> WS["workspace.ts<br/>is this path allowed?"]
-    TOOL --> EXEC["exec.ts<br/>spawn · kill the process group"]
-    TOOL --> NORM["normalize.ts<br/>redact secrets · cap size"]
+    TOOL --> WS["exec/workspace.ts<br/>is this path allowed?"]
+    TOOL --> EXEC["exec/exec.ts<br/>spawn · kill the process group"]
+    TOOL --> NORM["tools/normalize.ts<br/>redact secrets · cap size"]
     NORM -->|"the ONLY road back"| AG
 
     style AG fill:#cfe2ff,stroke:#084298,color:#052c65
     style GATE fill:#f8d7da,stroke:#721c24,color:#4a0f16
     style NORM fill:#d4edda,stroke:#155724,color:#0b2e13
 ```
+
+---
+
+## Where the code lives
+
+The source started as one flat `src/` folder and was later split into one
+folder per layer. The notes were written before that, so **any chapter that
+names a bare file — `agent.ts`, `exec.ts` — is still naming the right file; it
+just lives one level deeper now.** Paths in exercises have been updated. This
+is the whole map:
+
+| Was | Is now | Why there |
+|---|---|---|
+| `src/agent.ts` `context.ts` `session.ts` | `src/agent/` | the runtime, the context engine, and saved state |
+| `src/index.ts` (all of it) | `src/index.ts` + `src/cli/` | see below |
+| `src/render.ts` | `src/cli/ansi.ts` | **renamed** — colours and `renderDiff`, no state |
+| `src/commands.ts` `args.ts` `paste.ts` | `src/cli/` | terminal, and nothing else |
+| `src/exec.ts` `platform.ts` `workspace.ts` | `src/exec/` | the execution layer: processes and paths |
+| `src/normalize.ts` | `src/tools/normalize.ts` | ARCHITECTURE §2 puts result normalization in the tool system |
+| `src/permissions.ts` `provider.ts` `redact.ts` `config.ts` `types.ts` | unchanged | a layer that is one file stays flat |
+
+`index.ts` used to be the whole CLI — 511 lines, with a 370-line `main()`.
+Days 1–4 describe it that way, and that is how it really was. It has since been
+split, and each piece kept its comments:
+
+| Now in | What Days 1–4 called "index.ts" |
+|---|---|
+| `cli/repl.ts` | the REPL loop, Ctrl-C and the two AbortControllers, session saving |
+| `cli/renderer.ts` | the spinner, dim reasoning, tool lines — everything written to stdout |
+| `cli/approve.ts` | the permission prompt (`y` / `n` / `a`) |
+| `index.ts` | wiring only — 129 lines that build the pieces and start the loop |
+
+The one behavioural consequence: **the approval prompt is now testable.** It
+used to live inside `main()`, which runs on import, so no test could reach the
+last human check before a write. It has ten tests now.
 
 ---
 
@@ -137,8 +172,9 @@ open a file and press `Cmd+Shift+V`.
 ## The state of the project
 
 ```
-9 tools · 308 tests · ~3,700 lines of source
+9 tools · 333 tests · ~4,700 lines of source
 lint · CI on Linux, macOS and Windows · installable · sessions resume
+one folder per layer · /compact on demand
 ```
 
 Known gaps, honestly listed: `precheck` runs before the permission gate and its
@@ -146,3 +182,17 @@ Known gaps, honestly listed: `precheck` runs before the permission gate and its
 other read tools have not been audited for the prompt-before-boundary-check bug
 that `edit_file` had; and permission approvals are still per-session with no
 policy file.
+
+Changed after Day 4 was written, and not yet written up as a day of its own:
+the layer folders above, a `/compact` command (compaction used to run only when
+the budget forced it), and a shared `plural.ts` after `--list` was caught
+reporting "1 turns" — three hand-written plural ternaries and six places with
+none.
+
+Then CI went red again, in three unrelated ways, and each one is worth knowing:
+
+| Job | Cause |
+|---|---|
+| ubuntu · node 20.12 | `node --test` only expands globs from Node 22. The pattern arrived as a literal filename and matched nothing. Tests are now enumerated by [`scripts/run-tests.mjs`](../scripts/run-tests.mjs) rather than by a glob. |
+| windows | `list_files` reported `src\a.ts` there and `src/a.ts` everywhere else — two names for one file, in output the model hands straight back as a path. |
+| windows | A defaulted parameter that read `process.env.ComSpec`. Written up in [day-4/02](day-4/02-another-machine.md#where-this-technique-has-a-hole) — it is the technique that chapter teaches, failing in the one way it can. |

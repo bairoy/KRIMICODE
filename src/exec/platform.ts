@@ -6,6 +6,14 @@
  * from a Mac or a Linux CI runner. CI also runs the whole suite on
  * `windows-latest`; this file is what makes the decisions checkable everywhere
  * else.
+ *
+ * "Pure" has to include the environment, and that is not a stylistic point.
+ * `comSpec` was once written `= process.env['ComSpec']`, which looks injectable
+ * but is not: passing `undefined` explicitly triggers a default rather than
+ * overriding it. So the "no ComSpec" test read the real environment — unset on
+ * a Mac, set on Windows — and passed everywhere except the one platform it was
+ * written about. Nothing here takes a default; every input arrives as an
+ * argument from the caller.
  */
 
 /** A resolved spawn target: what to execute, and with which arguments. */
@@ -35,7 +43,7 @@ export function isWindows(platform: NodeJS.Platform): boolean {
 export function shellInvocation(
   command: string,
   platform: NodeJS.Platform,
-  comSpec: string | undefined = process.env['ComSpec'],
+  comSpec: string | undefined,
 ): Invocation {
   if (!isWindows(platform)) {
     return {
@@ -76,7 +84,7 @@ export function shimInvocation(
   file: string,
   args: readonly string[],
   platform: NodeJS.Platform,
-  comSpec: string | undefined = process.env['ComSpec'],
+  comSpec: string | undefined,
 ): Invocation {
   if (!isWindows(platform)) {
     return { file, args, windowsVerbatimArguments: false };
@@ -112,6 +120,21 @@ export function shimInvocation(
  * capital I to a dotless one under a Turkish locale, which would make the
  * comparison depend on the machine's language settings.
  */
+/**
+ * A path with forward slashes, whatever the platform produced.
+ *
+ * For paths that go into model context. Windows accepts `/` everywhere, so a
+ * tool that reports `src/a.ts` on every platform describes each file exactly
+ * one way — and the model hands that string straight back as an argument.
+ *
+ * Only rewritten on Windows: a backslash is illegal in a Windows filename but
+ * perfectly legal in a POSIX one, so doing this unconditionally would corrupt
+ * a file genuinely called `odd\name.ts`.
+ */
+export function toPosixPath(path: string, platform: NodeJS.Platform): string {
+  return isWindows(platform) ? path.replaceAll('\\', '/') : path;
+}
+
 export function isInside(
   child: string,
   root: string,

@@ -16,7 +16,7 @@ if (line === '/exit') break;
 Everything else you typed went to the model. Including `/hepl`, which cost a
 network request so a language model could puzzle over your typo.
 
-The dispatcher went into its own file, `src/commands.ts`, and that placement is
+The dispatcher went into its own file, `src/cli/commands.ts`, and that placement is
 the interesting decision.
 
 ```mermaid
@@ -91,7 +91,7 @@ Two smaller decisions came with it:
 
 - **Only when `stdout.isTTY`.** Piped into a log file those codes are literal
   junk. Same guard the spinner uses.
-- **The clearing lives in `index.ts`, not `commands.ts`.** ARCHITECTURE §2 puts
+- **The clearing lives in the REPL, not `commands.ts`.** ARCHITECTURE §2 puts
   rendering in the CLI layer. The dispatcher calls `context.clear()` and has no
   idea what a terminal is.
 
@@ -229,6 +229,24 @@ idle prompt was the one place that hadn't learned the lesson.
 Unit tests cannot reach this. `index.ts` runs `main()` on import — nothing in
 it is reachable from `node --test`. So it was tested with a real pseudo-terminal
 and a real keystroke:
+
+<details><summary>this changed later, and only halfway</summary>
+
+The CLI was afterwards split into `cli/repl.ts`, `cli/renderer.ts` and
+`cli/approve.ts`, so it is no longer all trapped behind `main()`.
+
+**`approve.ts` became genuinely testable** — the permission prompt takes an
+`ask` and a `write` callback and has no idea what a terminal is, so ten tests
+now cover the last human check before a write. That check had none.
+
+**The Ctrl-C code did not.** `createRepl()` still calls `stdin.setRawMode` and
+`readline.createInterface` on the real streams, because that is its whole job.
+Splitting the file did not make it testable; it just made it smaller.
+
+That is the honest version of the lesson: extracting code only buys testability
+when what you extract has no I/O of its own. Some things need a pty, and no
+amount of restructuring changes that.
+</details>
 
 ```
                  Ctrl-C at idle

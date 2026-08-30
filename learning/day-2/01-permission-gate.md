@@ -529,12 +529,12 @@ away within a single call. That is why it is the only place a bug can *persist*.
 
 Same tool, three calls, in order. Watch the variables change.
 
-**Call 1 — `edit_file` on `src/agent.ts`, you answer `always`**
+**Call 1 — `edit_file` on `src/agent/agent.ts`, you answer `always`**
 
 | Step | Variable | Value |
 |---|---|---|
 | `tool.classify` | `classification.operation` | `'WRITE'` |
-| | `classification.detail` | `'src/agent.ts'` |
+| | `classification.detail` | `'src/agent/agent.ts'` |
 | | `classification.diff` | `{ before: '...', after: '...' }` |
 | `check` | `request.toolName` | `'edit_file'` |
 | | `decision` | `'ask'` |

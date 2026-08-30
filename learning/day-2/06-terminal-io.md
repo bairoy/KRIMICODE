@@ -1,4 +1,4 @@
-# 06 — Terminal I/O (`src/paste.ts`, `src/render.ts`)
+# 06 — Terminal I/O (`src/cli/paste.ts`, `src/cli/ansi.ts`)
 
 Two problems that look cosmetic and aren't:
 
@@ -10,7 +10,7 @@ interesting of the two.
 
 ---
 
-# Part 1 — Bracketed paste (`src/paste.ts`)
+# Part 1 — Bracketed paste (`src/cli/paste.ts`)
 
 ## The problem
 
@@ -245,7 +245,7 @@ deliberate, documented limitation, not an oversight.
 
 ---
 
-# Part 2 — Rendering a diff you can trust (`src/render.ts`)
+# Part 2 — Rendering a diff you can trust (`src/cli/ansi.ts`)
 
 ## The bug
 
@@ -253,7 +253,7 @@ The first approval prompt looked like this:
 
 ```
 permission: write
-  Edit "src/agent.ts"
+  Edit "src/agent/agent.ts"
       - /** Runaway-loop guard: a model that keeps calling tools must st… (+1 more lines)
       + /** Runaway-loop guard: a model that keeps calling tools must st… (+1 more lines)
   allow? [y]es / [n]o / [a]lways:
@@ -380,7 +380,7 @@ export interface PermissionRequest {
 
 Not a pre-formatted string. So `permissions.ts` emits no ANSI codes and knows
 nothing about terminal width, and the entire diff rewrite happened in
-`render.ts` **without touching the gate at all**.
+`ansi.ts` **without touching the gate at all**.
 
 That's ARCHITECTURE §2 paying off concretely: rendering lives in the CLI layer,
 so rendering can be changed in the CLI layer.

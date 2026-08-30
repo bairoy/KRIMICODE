@@ -2,6 +2,7 @@ import type { Dirent } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { z } from 'zod';
+import { toPosixPath } from '../exec/platform.js';
 import { resolveInWorkspace, WorkspaceError } from '../exec/workspace.js';
 import { defineTool } from './define.js';
 import { counted } from '../plural.js';
@@ -73,7 +74,14 @@ async function walk(
       }
 
       const full = join(current, entry.name);
-      const shown = relative(root, full) || entry.name;
+      // Forward slashes on every platform. `relative` returns backslashes on
+      // Windows, which would describe the same file two different ways
+      // depending on who ran the agent — and this listing is what the model
+      // reads before choosing a path to pass to read_file or edit_file.
+      const shown = toPosixPath(
+        relative(root, full) || entry.name,
+        process.platform,
+      );
 
       if (entry.isDirectory()) {
         if (SKIP.has(entry.name)) {

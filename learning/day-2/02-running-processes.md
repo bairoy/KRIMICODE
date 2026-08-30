@@ -1,4 +1,4 @@
-# 02 — Running Processes (`src/exec.ts`)
+# 02 — Running Processes (`src/exec/exec.ts`)
 
 This file is the **only** place in the codebase that spawns a process
 (a CLAUDE.md non-negotiable). Every tool that needs to run something —
@@ -111,7 +111,7 @@ child.kill('SIGTERM')            →  2 orphaned processes survived
 process.kill(-pid, 'SIGTERM')    →  0
 ```
 
-The test in `src/tests/exec.test.ts` spawns `sleep N & sleep N`, times it out,
+The test in `src/tests/exec/exec.test.ts` spawns `sleep N & sleep N`, times it out,
 and asserts nothing matching survives. If someone "simplifies" `killGroup` to
 `child.kill()`, that test fails.
 

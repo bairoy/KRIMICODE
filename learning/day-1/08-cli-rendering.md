@@ -3,6 +3,12 @@
 The entry point. It owns **the terminal** — reading your typing and writing
 output — and nothing else.
 
+> This file later outgrew itself: 511 lines, with a 370-line `main()`. It is now
+> `src/index.ts` (wiring only) plus `src/cli/` — `repl.ts` for the loop,
+> `renderer.ts` for everything written to stdout, `approve.ts` for the
+> permission prompt. Every line below is still real code; look for it one
+> directory deeper. `learning/README.md` has the full map.
+
 No agent logic. No HTTP. No file access. Per `ARCHITECTURE.md` §2, the CLI layer
 owns "input, rendering, streaming display, approval prompts, cancellation" and
 must not contain business logic.

@@ -337,7 +337,7 @@ more. A silent cap makes the model think it saw everything.
    and what uses it?"* Watch it search, then read, then answer.
 3. Search for `foo(bar)` with and without `literal: true`. The difference is
    regex interpretation.
-4. Read the injection test in `src/tests/discovery.test.ts` and make sure you
+4. Read the injection test in `src/tests/tools/discovery.test.ts` and make sure you
    can explain what it proves.
 
 Next: `05-git-and-test-tools.md`.
