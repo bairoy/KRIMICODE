@@ -9,6 +9,7 @@ function fakeContext(overrides: Partial<CommandContext> = {}) {
   const output: string[] = [];
   let model = 'test-model';
   let cleared = 0;
+  let compacts = 0;
 
   const context: CommandContext = {
     write: (text) => output.push(text),
@@ -18,6 +19,10 @@ function fakeContext(overrides: Partial<CommandContext> = {}) {
     },
     clear: () => {
       cleared++;
+    },
+    compact: async () => {
+      compacts++;
+      return 'compacted';
     },
     listTools: () => [
       { name: 'read_file', description: 'Read a file. More detail here.' },
@@ -31,6 +36,7 @@ function fakeContext(overrides: Partial<CommandContext> = {}) {
     text: () => output.join(''),
     model: () => model,
     cleared: () => cleared,
+    compacts: () => compacts,
   };
 }
 
@@ -64,6 +70,44 @@ test('/clear forgets the conversation', async () => {
 
   assert.equal(await handleCommand('/clear', context), 'handled');
   assert.equal(cleared(), 1);
+});
+
+test('/compact folds history without going to the model', async () => {
+  const { context, compacts } = fakeContext();
+
+  assert.equal(await handleCommand('/compact', context), 'handled');
+  assert.equal(compacts(), 1);
+});
+
+test('/compact stays quiet when it worked', async () => {
+  // The compaction note is rendered by the CLI, exactly as it is for an
+  // automatic compaction. Printing here too would show the user two lines for
+  // one event.
+  const { context, text } = fakeContext();
+
+  await handleCommand('/compact', context);
+
+  assert.equal(text(), '');
+});
+
+test('/compact says so when there is nothing to fold', async () => {
+  const { context, text } = fakeContext({
+    compact: async () => 'nothing-to-do',
+  });
+
+  await handleCommand('/compact', context);
+
+  assert.match(text(), /nothing to compact/);
+});
+
+test('a cancelled /compact does not claim there was nothing to do', async () => {
+  // Both cases come back as "no compaction happened", but telling a user with
+  // a long conversation that there is nothing to compact would be a lie.
+  const { context, text } = fakeContext({ compact: async () => 'cancelled' });
+
+  await handleCommand('/compact', context);
+
+  assert.doesNotMatch(text(), /nothing to compact/);
 });
 
 test('/model with no argument reports the current model', async () => {

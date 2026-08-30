@@ -87,6 +87,7 @@ krimicode --help
 |---|---|
 | `/help` | list the commands |
 | `/clear` | forget the conversation and start fresh |
+| `/compact` | summarize older turns now, freeing context |
 | `/model` | show the current model, or `/model <name>` to switch |
 | `/tools` | list the tools the model can call |
 | `/sessions` | saved conversations for this directory |
@@ -168,6 +169,12 @@ ones kept verbatim. You will see a line like:
 
 History is only ever cut at a point where a complete exchange has finished, so
 a tool result is never separated from the call that asked for it.
+
+`/compact` does the same thing on demand. Automatic compaction always arrives
+at the worst moment — part-way through a turn you are waiting on — so it is
+worth folding deliberately before asking for something expensive. Either way
+the two most recent turns are kept verbatim, so a `/compact` cannot lose what
+you are in the middle of.
 
 ## Development
 

@@ -300,11 +300,28 @@ outright.
 Small, but it's the kind of thing users notice and quietly lose confidence
 over.
 
-**D · Add `/compact`.**
-Compaction only runs when the budget demands it. Add a slash command that
-triggers it deliberately, so a user can fold history before asking something
-expensive. Where does it live so that `commands.ts` still knows nothing about
-the Agent?
+**D · `/compact`.** *(Since built — read it instead.)*
+Compaction only ran when the budget demanded it, and `/compact` answered
+"unknown command". It now exists. Read `commands.ts` and `agent.ts` and answer
+three things: how does the dispatcher trigger a compaction while still knowing
+nothing about the Agent? Why does `compact()` return `null` instead of a
+`CompactionInfo` with zeroes in it? And why does the command print nothing at
+all when it succeeds?
+
+<details><summary>answers</summary>
+
+A `compact: () => Promise<CompactOutcome>` callback on `CommandContext`, like
+every other capability it has — three outcomes again, because *cancelled* and
+*nothing to fold* both mean "no compaction happened" and must not be reported
+as the same thing.
+
+`null` because a note reading `0 messages summarized, ~1200 → ~1200 tokens` is
+how a working command starts to look broken. Say "nothing to compact" instead.
+
+Nothing is printed on success because the CLI's `onCompact` renderer already
+prints the `⟳` line, exactly as it does for an automatic compaction. One event,
+one line, one place that draws it.
+</details>
 
 **E · Test the `grep` fallback on purpose.**
 `search_code` uses ripgrep when present and `grep` otherwise — so on any machine
